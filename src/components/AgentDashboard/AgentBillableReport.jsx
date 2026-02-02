@@ -185,7 +185,7 @@ const BillableReport = () => {
           ...(endDate && { date_to: endDate }),
         };
         // Call the correct API endpoint
-        const res = await axios.post("/tracker/view_daily", payload);
+        const res = await axios.post("/python/tracker/view_daily", payload);
         console.log('Daily report API response:', res.data);
         // Fix: Use trackers array from response
         let data = res.data?.data?.trackers;

@@ -225,7 +225,7 @@ const BillableReport = ({ userId }) => {
         // User filter (if userId is passed as prop)
         if (userId) payload.user_id = userId;
         // Call the /tracker/view_daily API
-        const res = await api.post('/tracker/view_daily', payload);
+        const res = await api.post('/python/tracker/view_daily', payload);
         console.log('Daily report API response:', res.data);
         console.log('Payload sent:', payload);
         // Ensure all dates on or before date_to are included
