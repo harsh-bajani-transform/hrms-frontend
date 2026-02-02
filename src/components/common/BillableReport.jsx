@@ -188,21 +188,19 @@ const BillableReport = ({ userId }) => {
   // Helper to get YYYY-MM-DD string
   const getDateString = (date) => date.toISOString().slice(0, 10);
 
-  // Fetch daily report data using /tracker/view API
+  // Fetch daily report data using /tracker/view_daily API
   useEffect(() => {
     const fetchData = async () => {
       setLoadingDaily(true);
       setErrorDaily(null);
       try {
-        if (!user?.user_id || !device_id || !device_type) {
+        if (!user?.user_id) {
           setDailyData([]);
           setLoadingDaily(false);
           return;
         }
         let payload = {
-          logged_in_user_id: user.user_id,
-          device_id,
-          device_type
+          logged_in_user_id: user.user_id
         };
         // Team filter
         if (teamFilter) {
@@ -226,22 +224,26 @@ const BillableReport = ({ userId }) => {
         }
         // User filter (if userId is passed as prop)
         if (userId) payload.user_id = userId;
-        // Call the new API
-        const res = await api.post('/tracker/view', payload);
+        // Call the /tracker/view_daily API
+        const res = await api.post('/tracker/view_daily', payload);
+        console.log('Daily report API response:', res.data);
+        console.log('Payload sent:', payload);
         // Ensure all dates on or before date_to are included
         let trackers = Array.isArray(res.data?.data?.trackers) ? res.data.data.trackers : [];
+        console.log('Trackers extracted:', trackers);
         if (payload.date_from && payload.date_to) {
           // Normalize all dates to YYYY-MM-DD for comparison (ignore time)
           const fromStr = payload.date_from;
           const toStr = payload.date_to;
           trackers = trackers.filter(row => {
-            const rowDate = row.date_time || row.date;
+            const rowDate = row.work_date || row.date_time || row.date;
             if (!rowDate) return false;
             // Always compare only the date part (YYYY-MM-DD)
             const dStr = new Date(rowDate).toISOString().slice(0, 10);
             return dStr >= fromStr && dStr <= toStr;
           });
         }
+        console.log('Trackers after date filter:', trackers);
         setDailyData(trackers);
       } catch {
         setErrorDaily("Failed to fetch daily report data");
@@ -251,7 +253,7 @@ const BillableReport = ({ userId }) => {
     };
     fetchData();
     // eslint-disable-next-line
-  }, [userId, dailyMonth, teamFilter, device_id, device_type, teamOptions]);
+  }, [userId, dailyMonth, teamFilter, teamOptions]);
 
   // Fetch monthly report data from API when monthly tab is active
   const [monthlySummaryData, setMonthlySummaryData] = useState([]);
@@ -458,7 +460,43 @@ const BillableReport = ({ userId }) => {
                 <UserCard
                   key={userId}
                   user={user}
-                  dailyData={rows}
+                  dailyData={(() => {
+                    const mappedData = rows.map(r => {
+                      // Format date as DD-MM-YYYY, never show time
+                      let date = '-';
+                      if (r.work_date) {
+                        const d = new Date(r.work_date);
+                        if (!isNaN(d.getTime())) {
+                          const pad = n => String(n).padStart(2, '0');
+                          date = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+                        }
+                      }
+                      // Map response fields to display format
+                      let worked_hours = '-';
+                      if (r.cumulative_billable_hours_till_day !== null && r.cumulative_billable_hours_till_day !== undefined && !isNaN(Number(r.cumulative_billable_hours_till_day))) {
+                        worked_hours = Number(r.cumulative_billable_hours_till_day).toFixed(2);
+                      }
+                      let daily_required_hours = '-';
+                      if (r.daily_required_hours !== null && r.daily_required_hours !== undefined && !isNaN(Number(r.daily_required_hours))) {
+                        daily_required_hours = Number(r.daily_required_hours).toFixed(2);
+                      }
+                      return {
+                        date,
+                        date_time: date, // Also set date_time for compatibility
+                        assign_hours: '-',
+                        assignHours: '-', // Alternative field name
+                        worked_hours,
+                        workedHours: worked_hours, // Alternative field name
+                        billable_hours: worked_hours, // Alternative field name
+                        qc_score: '-',
+                        qcScore: '-', // Alternative field name
+                        daily_required_hours,
+                        dailyRequiredHours: daily_required_hours, // Alternative field name
+                      };
+                    });
+                    console.log('Mapped data for UserCard:', mappedData);
+                    return mappedData;
+                  })()}
                   defaultCollapsed={true}
                   formatDateTime={formatDateTime}
                 />

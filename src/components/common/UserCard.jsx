@@ -54,7 +54,7 @@ export default function UserCard({ user, dailyData = [], defaultCollapsed = fals
           <tbody>
             {filteredRows.map((row, idx) => (
               <tr key={row.date_time || row.date || idx} className="hover:bg-blue-50 transition group">
-                <td className="px-4 py-3 text-black font-medium whitespace-nowrap">{formatDateTime(row.date_time || row.date)}</td>
+                <td className="px-4 py-3 text-black font-medium whitespace-nowrap">{row.date_time || row.date || '-'}</td>
                 <td className="px-4 py-3 text-center text-black">-</td>
                 <td className="px-4 py-3 text-center text-black">{row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-'}</td>
                 <td className="px-4 py-3 text-center text-black">{'qc_score' in row ? (row.qc_score !== null ? Number(row.qc_score).toFixed(2) : '-') : '-'}</td>
@@ -177,13 +177,19 @@ export default function UserCard({ user, dailyData = [], defaultCollapsed = fals
             <tbody>
               {filteredRows.map((row, idx) => (
                 <tr key={row.date_time || row.date || idx} className="hover:bg-blue-50 transition group">
-                  <td className="px-4 py-3 text-black font-medium whitespace-nowrap">{formatDateTime(row.date_time || row.date)}</td>
+                  <td className="px-4 py-3 text-black font-medium whitespace-nowrap">{row.date_time || row.date || '-'}</td>
                   <td className="px-4 py-3 text-center text-black">
-                    {row.assign_hours !== undefined ? Number(row.assign_hours).toFixed(2) : row.assignHours ?? row.assigned_hour ?? "-"}
+                    {row.assign_hours === '-' || row.assignHours === '-' ? '-' : (row.assign_hours !== undefined && row.assign_hours !== null && !isNaN(Number(row.assign_hours)) ? Number(row.assign_hours).toFixed(2) : (row.assignHours ?? row.assigned_hour ?? "-"))}
                   </td>
-                  <td className="px-4 py-3 text-center text-black">{row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-center text-black">{'qc_score' in row ? (row.qc_score !== null ? Number(row.qc_score).toFixed(2) : '-') : '-'}</td>
-                  <td className="px-4 py-3 text-center text-black">{row.tenure_target ? Number(row.tenure_target).toFixed(2) : '-'}</td>
+                  <td className="px-4 py-3 text-center text-black">
+                    {row.worked_hours === '-' || row.workedHours === '-' ? '-' : (row.billable_hours !== undefined && row.billable_hours !== null && !isNaN(Number(row.billable_hours)) ? Number(row.billable_hours).toFixed(2) : (row.worked_hours ?? row.workedHours ?? '-'))}
+                  </td>
+                  <td className="px-4 py-3 text-center text-black">
+                    {row.qc_score === '-' || row.qcScore === '-' ? '-' : ('qc_score' in row ? (row.qc_score !== null && row.qc_score !== undefined && !isNaN(Number(row.qc_score)) ? Number(row.qc_score).toFixed(2) : '-') : (row.qcScore ?? '-'))}
+                  </td>
+                  <td className="px-4 py-3 text-center text-black">
+                    {row.daily_required_hours === '-' || row.dailyRequiredHours === '-' ? '-' : (row.tenure_target !== undefined && row.tenure_target !== null && !isNaN(Number(row.tenure_target)) ? Number(row.tenure_target).toFixed(2) : (row.daily_required_hours ?? row.dailyRequiredHours ?? '-'))}
+                  </td>
                 </tr>
               ))}
             </tbody>

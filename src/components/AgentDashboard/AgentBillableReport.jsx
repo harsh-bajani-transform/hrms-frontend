@@ -13,8 +13,10 @@ import { useAuth } from "../../context/AuthContext";
 
 
 const BillableReport = () => {
-    // Export the visible monthly report table (with filters applied)
-    const handleExportMonthlyTable = () => {
+  // Always call hooks at the top
+  const { user } = useAuth();
+  // Export the visible monthly report table (with filters applied)
+  const handleExportMonthlyTable = () => {
       try {
         const exportData = monthlySummaryData.map(row => ({
           'Year & Month': row.month_year,
@@ -178,22 +180,17 @@ const BillableReport = () => {
       try {
         // Build payload for API
         const payload = {
-          device_id: 'ABIUGBHIU',
-          device_type: 'Laptop',
+          logged_in_user_id: user?.user_id,
+          ...(startDate && { date_from: startDate }),
+          ...(endDate && { date_to: endDate }),
         };
-        // If month filter is applied, use month_year
-        if (monthFilter) {
-          const [year, month] = monthFilter.split('-');
-          const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-          const monthLabel = monthNames[Number(month) - 1];
-          payload.month_year = `${monthLabel}${year}`;
-        }
-        // If date range is applied, use date_from and date_to
-        if (startDate) payload.date_from = startDate;
-        if (endDate) payload.date_to = endDate;
-        // Call API
-        const res = await fetchDailyBillableReport(payload);
-        setDailyData(Array.isArray(res.data?.trackers) ? res.data.trackers : []);
+        // Call the correct API endpoint
+        const res = await axios.post("/tracker/view_daily", payload);
+        console.log('Daily report API response:', res.data);
+        // Fix: Use trackers array from response
+        let data = res.data?.data?.trackers;
+        if (data && !Array.isArray(data)) data = [data];
+        setDailyData(Array.isArray(data) ? data : []);
       } catch (err) {
         setErrorDaily(getFriendlyErrorMessage(err));
       } finally {
@@ -201,14 +198,13 @@ const BillableReport = () => {
       }
     };
     fetchData();
-  }, [startDate, endDate, monthFilter]);
+  }, [startDate, endDate, user]);
 
   // State for monthly report API data, loading, and error
   const [monthlySummaryData, setMonthlySummaryData] = useState([]);
   const [loadingMonthly, setLoadingMonthly] = useState(false);
   const [errorMonthly, setErrorMonthly] = useState(null);
   const [monthlyMonth, setMonthlyMonth] = useState("");
-  const { user } = useAuth();
 
   // Fetch monthly report data from API when monthly tab is active or month filter changes
   useEffect(() => {
@@ -228,9 +224,9 @@ const BillableReport = () => {
           const monthLabel = monthNames[Number(month) - 1];
           payload.month_year = `${monthLabel}${year}`;
         }
-        // Use the new API endpoint for monthly report
-        const res = await axios.post("/python/user_monthly_tracker/list", payload);
-        setMonthlySummaryData(Array.isArray(res.data?.data) ? res.data.data : []);
+        // Use the fetchMonthlyBillableReport service function
+        const res = await fetchMonthlyBillableReport(payload);
+        setMonthlySummaryData(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         setErrorMonthly(getFriendlyErrorMessage(err));
       } finally {
@@ -248,47 +244,28 @@ const BillableReport = () => {
     try {
       // Format and prepare export data
       const exportData = filteredDailyData.map(row => {
-        let formattedDateTime = '';
-        if (row.date_time) {
-          const d = dayjs(row.date_time);
-          formattedDateTime = d.isValid() ? d.format('DD-MM-YYYY HH:mm') : row.date_time;
+        // Only show date part from work_date
+        let formattedDate = '-';
+        if (row.work_date) {
+          const d = new Date(row.work_date);
+          if (!isNaN(d)) {
+            const pad = n => String(n).padStart(2, '0');
+            formattedDate = `${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
+          }
         }
         return {
-          'Date-Time': formattedDateTime,
+          'Date': formattedDate,
           'Assign Hours': '-',
-          'Worked Hours': row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-',
-          'QC score': row.qc_score !== undefined && row.qc_score !== null ? Number(row.qc_score).toFixed(2) : '-',
-          'Daily Required Hours': row.tenure_target ? Number(row.tenure_target).toFixed(2) : '-',
+          'Worked Hours': row.cumulative_billable_hours_till_day != null ? Number(row.cumulative_billable_hours_till_day).toFixed(2) : '-',
+          'QC Score': '-',
+          'Daily Required Hours': row.daily_required_hours != null ? Number(row.daily_required_hours).toFixed(2) : '-',
         };
       });
 
-      // Calculate totals for countable columns
-      const totalWorked = exportData.reduce((sum, r) => sum + (Number(r['Worked Hours']) || 0), 0);
-      const totalRequired = exportData.reduce((sum, r) => sum + (Number(r['Daily Required Hours']) || 0), 0);
-      const qcScores = exportData.map(r => Number(r['QC score'])).filter(v => !isNaN(v));
-      const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
-
-      // Add totals row
-      exportData.push({
-        'Date-Time': 'TOTAL',
-        'Assign Hours': '-',
-        'Worked Hours': totalWorked,
-        'QC score': avgQC,
-        'Daily Required Hours': totalRequired,
-      });
-
       const worksheet = XLSX.utils.json_to_sheet(exportData);
-      worksheet['!cols'] = [
-        { wch: 20 },
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 10 },
-        { wch: 20 },
-      ];
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Daily Report');
-      const filename = `Daily_Report_${monthFilter || (startDate || 'all') + '_' + (endDate || 'all')}.xlsx`;
-      XLSX.writeFile(workbook, filename);
+      XLSX.writeFile(workbook, 'Daily_Report.xlsx');
       toast.success('Daily report exported!');
     } catch {
       toast.error('Failed to export daily report');
@@ -376,11 +353,35 @@ const BillableReport = () => {
                   {filteredDailyData.length > 0 ? (
                     filteredDailyData.map((row, idx) => (
                       <tr key={idx} className="hover:bg-blue-50 transition group">
-                        <td className="px-6 py-3 text-black font-medium whitespace-nowrap">{row.date_time ? row.date_time : '-'}</td>
+                        {/* Show only date part from work_date */}
+                        <td className="px-6 py-3 text-black font-medium whitespace-nowrap">{
+                          (() => {
+                            if (row.work_date) {
+                              const d = new Date(row.work_date);
+                              if (!isNaN(d)) {
+                                const pad = n => String(n).padStart(2, '0');
+                                return `${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
+                              }
+                            }
+                            return '-';
+                          })()
+                        }</td>
+                        {/* Assign Hours: always show '-' */}
                         <td className="px-6 py-3 text-center text-black">-</td>
-                        <td className="px-6 py-3 text-center text-black">{row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-'}</td>
-                        <td className="px-6 py-3 text-center text-black">{'qc_score' in row ? (row.qc_score !== null ? Number(row.qc_score).toFixed(2) : '-') : '-'}</td>
-                        <td className="px-6 py-3 text-center text-black">{row.tenure_target ? Number(row.tenure_target).toFixed(2) : '-'}</td>
+                        {/* Worked Hours: show cumulative_billable_hours_till_day */}
+                        <td className="px-6 py-3 text-center text-black">{
+                          row.cumulative_billable_hours_till_day != null
+                            ? Number(row.cumulative_billable_hours_till_day).toFixed(2)
+                            : '-'
+                        }</td>
+                        {/* QC Score: always show '-' */}
+                        <td className="px-6 py-3 text-center text-black">-</td>
+                        {/* Daily Required Hours: show daily_required_hours */}
+                        <td className="px-6 py-3 text-center text-black">{
+                          row.daily_required_hours != null
+                            ? Number(row.daily_required_hours).toFixed(2)
+                            : '-'
+                        }</td>
                       </tr>
                     ))
                   ) : (
