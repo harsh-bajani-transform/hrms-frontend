@@ -14,6 +14,7 @@ const BillableReport = ({ userId }) => {
   const { device_id, device_type } = useDeviceInfo();
 
   // Helper to format date/time for display and export
+  // Always return raw backend string for date/time
   function formatDateTime(dateInput) {
     if (!dateInput) return '-';
     return dateInput;
@@ -61,7 +62,7 @@ const BillableReport = ({ userId }) => {
       const exportData = exportRows.map(row => ({
         'User Name': row.user_name || '-',
         'Team': row.team_name || '-',
-        'Date-Time': formatDateTime(row.date_time ?? row.date),
+        'Date-Time': row.date_time ?? row.date ?? '-',
         'Assigned Hour': row.assign_hours !== undefined ? Number(row.assign_hours).toFixed(2) : (row.assignHours ?? row.assigned_hour ?? '-'),
         'Worked Hours': row.billable_hours !== undefined ? Number(row.billable_hours).toFixed(2) : (row.workedHours ?? row.worked_hours ?? '-'),
         'QC Score': 'qc_score' in row ? (row.qc_score !== null && row.qc_score !== undefined ? Number(row.qc_score).toFixed(2) : '-') : (row.qcScore ?? row.qc_score ?? '-'),
@@ -335,7 +336,7 @@ const BillableReport = ({ userId }) => {
         return;
       }
       let exportData = dailyRows.map(row => ({
-        'Date-Time': formatDateTime(row.date_time ?? row.date),
+        'Date-Time': row.date_time ?? row.date ?? '-',
         'Assigned Hour': row.assign_hours !== undefined ? Number(row.assign_hours).toFixed(2) : (row.assignHours ?? row.assigned_hour ?? '-'),
         'Worked Hours': row.billable_hours !== undefined ? Number(row.billable_hours).toFixed(2) : (row.workedHours ?? row.worked_hours ?? '-'),
         'QC Score': 'qc_score' in row ? (row.qc_score !== null && row.qc_score !== undefined ? Number(row.qc_score).toFixed(2) : '-') : (row.qcScore ?? row.qc_score ?? '-'),

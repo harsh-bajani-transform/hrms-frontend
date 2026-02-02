@@ -134,13 +134,12 @@ const QAAgentDashboard = ({ embedded = false }) => {
         }
         trackersWithFiles = trackersWithFiles.filter(tracker => {
           if (!tracker.date_time) return false;
-          // Use the full date string for robust parsing (works for both ISO and RFC formats)
-          const trackerDate = new Date(tracker.date_time);
-          // Zero out the time for comparison
-          const trackerDateOnly = new Date(trackerDate.getFullYear(), trackerDate.getMonth(), trackerDate.getDate());
+          // Only compare the date part (YYYY-MM-DD) from the raw string
+          const trackerDateStr = tracker.date_time.split(' ')[2] + ' ' + tracker.date_time.split(' ')[3] + ' ' + tracker.date_time.split(' ')[4];
+          const trackerDate = new Date(trackerDateStr);
           const fromDateOnly = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
           const toDateOnly = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
-          return trackerDateOnly >= fromDateOnly && trackerDateOnly <= toDateOnly;
+          return trackerDate >= fromDateOnly && trackerDate <= toDateOnly;
         });
         console.log('[QAAgentDashboard] trackersWithFiles after date filter:', trackersWithFiles);
 

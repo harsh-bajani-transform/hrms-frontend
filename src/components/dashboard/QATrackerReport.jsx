@@ -107,9 +107,7 @@ const QATrackerReport = () => {
     try {
       // Prepare data for export
       const exportData = trackers.map((tracker) => ({
-        'Date/Time': tracker.date_time
-          ? format(new Date(tracker.date_time), "dd/MM/yyyy HH:mm")
-          : "-",
+        'Date/Time': tracker.date_time ? tracker.date_time : "-",
         'Agent': tracker.user_name || "-",
         'Project': tracker.project_name || "-",
         'Task': tracker.task_name || "-",

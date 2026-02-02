@@ -204,9 +204,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
     try {
       // Prepare data for export
       const exportData = trackers.map((tracker) => ({
-        'Date/Time': tracker.date_time
-          ? format(new Date(tracker.date_time), "dd/MM/yyyy HH:mm")
-          : "-",
+        'Date/Time': tracker.date_time ? tracker.date_time : "-",
         'Project': tracker.project_name || getProjectName(tracker.project_id),
         'Task': tracker.task_name || '-',
         // Always show tenure_target from tracker/view for all roles

@@ -376,9 +376,7 @@ const BillableReport = () => {
                   {filteredDailyData.length > 0 ? (
                     filteredDailyData.map((row, idx) => (
                       <tr key={idx} className="hover:bg-blue-50 transition group">
-                        <td className="px-6 py-3 text-black font-medium whitespace-nowrap">{
-                          row.date_time ? row.date_time : '-'
-                        }</td>
+                        <td className="px-6 py-3 text-black font-medium whitespace-nowrap">{row.date_time ? row.date_time : '-'}</td>
                         <td className="px-6 py-3 text-center text-black">-</td>
                         <td className="px-6 py-3 text-center text-black">{row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-'}</td>
                         <td className="px-6 py-3 text-center text-black">{'qc_score' in row ? (row.qc_score !== null ? Number(row.qc_score).toFixed(2) : '-') : '-'}</td>
