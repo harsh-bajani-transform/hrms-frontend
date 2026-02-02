@@ -84,7 +84,7 @@ const ManageModule = ({ activeTab }) => {
           try {
                setLoadingProjects(true);
 
-               const res = await fetchProjectsList();
+               const res = await fetchProjectsList(userId);
 
                if (res.status === 200) {
                     const formattedProjects = (res.data || []).map((p) => {

@@ -111,7 +111,7 @@ const DashboardPage = ({
     try {
       setLoadingManagedProjects(true);
       console.log('[AssistantManager] Loading projects...');
-      const res = await fetchProjectsList();
+      const res = await fetchProjectsList(currentUser?.user_id);
       console.log('[AssistantManager] fetchProjectsList response:', res);
       if (res.status === 200 || res.status === '200') {
         const projectsArray = Array.isArray(res.data) ? res.data : [];
@@ -152,7 +152,7 @@ const DashboardPage = ({
     } finally {
       setLoadingManagedProjects(false);
     }
-  }, []);
+  }, [currentUser]);
 
   // Load users for Manage → Users tab from backend
   // Fallback no-op for handleResolveRequest to prevent ReferenceError

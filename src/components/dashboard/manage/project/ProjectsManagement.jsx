@@ -111,7 +111,7 @@ const ProjectsManagement = ({
     await loadDropdowns();
     let fullProject = project;
     try {
-      const res = await fetchProjectsList();
+      const res = await fetchProjectsList(user?.user_id);
       if (res && Array.isArray(res.data)) {
         // Find the project by project_id (API uses project_id, not id)
         const found = res.data.find(p => String(p.project_id) === String(project.project_id || project.id));

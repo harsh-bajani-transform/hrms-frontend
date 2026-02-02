@@ -5,12 +5,8 @@ import { toast } from 'react-hot-toast';
 import TaskTable from './TaskTable';
 import EditTaskModal from './EditTaskModal';
 import TasksModal from './TasksModal';
-
-// Helper to fetch project list
-const fetchProjectList = async (logged_in_user_id) => {
-  const res = await axios.post('/project/list', { logged_in_user_id });
-  return res.data.data;
-};
+import { useAuth } from '../../../../context/AuthContext';
+import { fetchProjectsList } from '../../../../services/projectService';
 
 // If this is a single card, keep as is. If you want to show a list, use below:
 const ProjectCard = ({
@@ -25,6 +21,7 @@ const ProjectCard = ({
   setExpanded,
   fetchList,
 }) => {
+  const { user } = useAuth();
   const [editTaskModal, setEditTaskModal] = useState({ open: false, task: null });
   const [showTasksModal, setShowTasksModal] = useState(false);
   const [taskTableRefresh, setTaskTableRefresh] = useState(Date.now());
@@ -32,12 +29,12 @@ const ProjectCard = ({
   // Optionally, fetch project list if fetchList prop is true
   const [projects, setProjects] = useState([]);
   useEffect(() => {
-    if (fetchList) {
-      fetchProjectList(93)
-        .then(setProjects)
+    if (fetchList && user?.user_id) {
+      fetchProjectsList(user.user_id)
+        .then(res => setProjects(res.data || []))
         .catch(() => toast.error('Failed to fetch project list'));
     }
-  }, [fetchList]);
+  }, [fetchList, user]);
 
   // If fetchList, render all projects
   if (fetchList) {
@@ -81,9 +78,9 @@ const ProjectCard = ({
                 // Download Project File: fetch latest project_file from /project/list and open as direct link
                 onClick={async () => {
                   try {
-                    // 1. Fetch latest project list
-                    const res = await axios.post('/python/project/list', { logged_in_user_id: 93 });
-                    const projects = res.data?.data || [];
+                    // 1. Fetch latest project list with logged-in user ID
+                    const res = await fetchProjectsList(user?.user_id);
+                    const projects = res.data || [];
                     console.log('[DEBUG] /project/list response:', projects);
                     // 2. Find this project by id
                     const current = projects.find(p => p.project_id === (project.id || project.project_id));

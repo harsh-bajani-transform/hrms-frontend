@@ -48,10 +48,11 @@ export const createProject = async (payload) => {
 
 /**
  * Fetch Projects List API
+ * @param {number} logged_in_user_id - The logged-in user's ID for filtering projects
  * @returns {Promise} Project list response
  */
-export const fetchProjectsList = async () => {
-  const res = await api.post("/project/list", {});
+export const fetchProjectsList = async (logged_in_user_id) => {
+  const res = await api.post("/project/list", { logged_in_user_id });
   return res.data;
 };
 
