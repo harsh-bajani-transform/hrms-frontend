@@ -51,47 +51,62 @@ const AddUserFormModal = ({
      const getFieldVisibility = (selectedRoleId) => {
           const roleId = Number(selectedRoleId);
           
-          // Default: all fields visible and required (Super Admin, Admin, Agent)
-          if (!roleId || roleId === 1 || roleId === 2 || roleId === 6) {
+          // Agent (role_id = 6): Show tenure field
+          if (roleId === 6) {
                return {
                     projectManager: { visible: true, required: true },
                     assistantManager: { visible: true, required: true },
                     qualityAnalyst: { visible: true, required: true },
+                    tenure: { visible: true, required: true },
                };
           }
           
-          // QA Agent (role_id = 5): Hide qualityAnalyst field
+          // Default: hide tenure field (Super Admin, Admin)
+          if (!roleId || roleId === 1 || roleId === 2) {
+               return {
+                    projectManager: { visible: true, required: true },
+                    assistantManager: { visible: true, required: true },
+                    qualityAnalyst: { visible: true, required: true },
+                    tenure: { visible: false, required: false },
+               };
+          }
+          
+          // QA Agent (role_id = 5): Hide qualityAnalyst and tenure fields
           if (roleId === 5) {
                return {
                     projectManager: { visible: true, required: true },
                     assistantManager: { visible: true, required: true },
                     qualityAnalyst: { visible: false, required: false },
+                    tenure: { visible: false, required: false },
                };
           }
           
-          // Assistant Manager (role_id = 4): Hide assistantManager and qualityAnalyst fields
+          // Assistant Manager (role_id = 4): Hide assistantManager, qualityAnalyst and tenure fields
           if (roleId === 4) {
                return {
                     projectManager: { visible: true, required: true },
                     assistantManager: { visible: false, required: false },
                     qualityAnalyst: { visible: false, required: false },
+                    tenure: { visible: false, required: false },
                };
           }
           
-          // Project Manager (role_id = 3): Hide all three fields
+          // Project Manager (role_id = 3): Hide all three fields and tenure
           if (roleId === 3) {
                return {
                     projectManager: { visible: false, required: false },
                     assistantManager: { visible: false, required: false },
                     qualityAnalyst: { visible: false, required: false },
+                    tenure: { visible: false, required: false },
                };
           }
           
-          // Fallback: show all fields
+          // Fallback: hide tenure field
           return {
                projectManager: { visible: true, required: true },
                assistantManager: { visible: true, required: true },
                qualityAnalyst: { visible: true, required: true },
+               tenure: { visible: false, required: false },
           };
      };
 
@@ -249,8 +264,11 @@ const AddUserFormModal = ({
           const teamError = validateDropdown(newUser.team, "Team");
           if (teamError) errors.team = teamError;
 
-          const tenureError = validateTenure(newUser.tenure || "");
-          if (tenureError) errors.tenure = tenureError;
+          // Validate tenure (only if visible and required for this role)
+          if (visibility.tenure && visibility.tenure.visible && visibility.tenure.required) {
+               const tenureError = validateTenure(newUser.tenure || "");
+               if (tenureError) errors.tenure = tenureError;
+          }
 
           return errors;
      };
@@ -687,26 +705,28 @@ const AddUserFormModal = ({
 
 
 
-                              {/* Tenure Field */}
-                              <div className="md:col-span-1">
-                                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Tenure <span className="text-red-600">*</span>
-                                   </label>
-                                   <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0.1"
-                                        className={`block w-full px-3 py-3 text-sm bg-gray-50 border ${hasError("tenure") ? 'border-red-500' : 'border-gray-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                                        placeholder="e.g. 1.5"
-                                        value={newUser.tenure ?? ""}
-                                        onChange={(e) => handleFieldChange("tenure", e.target.value, validateTenure)}
-                                        onBlur={() => handleFieldBlur("tenure", validateTenure)}
-                                        required={!isEditMode}
-                                   />
-                                   {getErrorMessage("tenure") && (
-                                        <p className="mt-1 text-xs text-red-600">{getErrorMessage("tenure")}</p>
-                                   )}
-                              </div>
+                              {/* Tenure Field - Only for Agents */}
+                              {fieldVisibility.tenure && fieldVisibility.tenure.visible && (
+                                   <div className="md:col-span-1">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                             Tenure {fieldVisibility.tenure.required && <span className="text-red-600">*</span>}
+                                        </label>
+                                        <input
+                                             type="number"
+                                             step="0.1"
+                                             min="0.1"
+                                             className={`block w-full px-3 py-3 text-sm bg-gray-50 border ${hasError("tenure") ? 'border-red-500' : 'border-gray-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                             placeholder="e.g. 1.5"
+                                             value={newUser.tenure ?? ""}
+                                             onChange={(e) => handleFieldChange("tenure", e.target.value, validateTenure)}
+                                             onBlur={() => handleFieldBlur("tenure", validateTenure)}
+                                             required={fieldVisibility.tenure.required && !isEditMode}
+                                        />
+                                        {getErrorMessage("tenure") && (
+                                             <p className="mt-1 text-xs text-red-600">{getErrorMessage("tenure")}</p>
+                                        )}
+                                   </div>
+                              )}
 
                               {/* Address - Optional field */}
                               <div className="md:col-span-1">
