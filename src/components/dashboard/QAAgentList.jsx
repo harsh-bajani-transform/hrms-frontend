@@ -180,14 +180,7 @@ const QAAgentList = () => {
                                   className="border-b border-slate-100 hover:bg-blue-50/60 transition-colors group"
                                 >
                                   <td className="px-5 py-3 text-slate-700 whitespace-nowrap">
-                                    {tracker.date_time
-                                      ? (() => {
-                                          const d = new Date(tracker.date_time);
-                                          // Format as UTC, not local time
-                                          const pad = (n) => n.toString().padStart(2, '0');
-                                          return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-                                        })()
-                                      : "-"}
+                                    {tracker.date_time ? tracker.date_time : "-"}
                                   </td>
                                   <td className="px-5 py-3 text-slate-700 whitespace-nowrap">
                                     {tracker.project_name || "-"}

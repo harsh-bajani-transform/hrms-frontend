@@ -310,22 +310,7 @@ const QAAgentDashboard = ({ embedded = false }) => {
                         <div>
                           <p className="text-xs text-slate-500 mb-0.5">Date/Time</p>
                           <p className="text-sm font-medium text-slate-700">
-                            {file.date_time
-                              ? (() => {
-                                  const d = new Date(file.date_time);
-                                  const pad = (n) => n.toString().padStart(2, '0');
-                                  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-                                })()
-                              : "-"}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {file.date_time
-                              ? (() => {
-                                  const d = new Date(file.date_time);
-                                  const pad = (n) => n.toString().padStart(2, '0');
-                                  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-                                })()
-                              : ""}
+                            {file.date_time ? file.date_time : "-"}
                           </p>
                         </div>
                         <div>

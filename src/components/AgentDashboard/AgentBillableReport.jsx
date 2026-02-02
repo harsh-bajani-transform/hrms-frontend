@@ -377,14 +377,7 @@ const BillableReport = () => {
                     filteredDailyData.map((row, idx) => (
                       <tr key={idx} className="hover:bg-blue-50 transition group">
                         <td className="px-6 py-3 text-black font-medium whitespace-nowrap">{
-                          row.date_time
-                            ? (() => {
-                                const d = new Date(row.date_time);
-                                const pad = (n) => n.toString().padStart(2, '0');
-                                const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-                                return `${pad(d.getUTCDate())}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-                              })()
-                            : '-'
+                          row.date_time ? row.date_time : '-'
                         }</td>
                         <td className="px-6 py-3 text-center text-black">-</td>
                         <td className="px-6 py-3 text-center text-black">{row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-'}</td>
