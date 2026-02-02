@@ -134,12 +134,34 @@ const QAAgentDashboard = ({ embedded = false }) => {
         }
         trackersWithFiles = trackersWithFiles.filter(tracker => {
           if (!tracker.date_time) return false;
-          // Only compare the date part (YYYY-MM-DD) from the raw string
-          const trackerDateStr = tracker.date_time.split(' ')[2] + ' ' + tracker.date_time.split(' ')[3] + ' ' + tracker.date_time.split(' ')[4];
-          const trackerDate = new Date(trackerDateStr);
+          
+          // Parse the date_time field - handle various formats
+          let trackerDate;
+          try {
+            // Try parsing as-is first
+            trackerDate = new Date(tracker.date_time);
+            
+            // If invalid, try extracting date portion
+            if (isNaN(trackerDate.getTime())) {
+              // Extract YYYY-MM-DD pattern from the string
+              const dateMatch = tracker.date_time.match(/(\d{4})-(\d{2})-(\d{2})/);
+              if (dateMatch) {
+                trackerDate = new Date(dateMatch[0]);
+              } else {
+                return false;
+              }
+            }
+          } catch (e) {
+            console.error('[QAAgentDashboard] Error parsing date:', tracker.date_time, e);
+            return false;
+          }
+          
+          // Compare only date parts (ignore time)
+          const trackerDateOnly = new Date(trackerDate.getFullYear(), trackerDate.getMonth(), trackerDate.getDate());
           const fromDateOnly = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
           const toDateOnly = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
-          return trackerDate >= fromDateOnly && trackerDate <= toDateOnly;
+          
+          return trackerDateOnly >= fromDateOnly && trackerDateOnly <= toDateOnly;
         });
         console.log('[QAAgentDashboard] trackersWithFiles after date filter:', trackersWithFiles);
 
