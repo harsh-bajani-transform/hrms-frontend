@@ -19,11 +19,11 @@ const BillableReport = ({ userId }) => {
     const dateObj = new Date(dateInput);
     if (isNaN(dateObj)) return '-';
     const pad = (n) => String(n).padStart(2, '0');
-    const day = pad(dateObj.getDate());
-    const month = pad(dateObj.getMonth() + 1);
-    const year = dateObj.getFullYear();
-    const hours = pad(dateObj.getHours());
-    const minutes = pad(dateObj.getMinutes());
+    const day = pad(dateObj.getUTCDate());
+    const month = pad(dateObj.getUTCMonth() + 1);
+    const year = dateObj.getUTCFullYear();
+    const hours = pad(dateObj.getUTCHours());
+    const minutes = pad(dateObj.getUTCMinutes());
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   }
 

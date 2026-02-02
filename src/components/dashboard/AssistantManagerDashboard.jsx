@@ -261,10 +261,7 @@ const AssistantManagerDashboard = () => {
                       <div>
                         <p className="text-xs text-slate-500 mb-0.5">Date/Time</p>
                         <p className="text-sm font-medium text-slate-700">
-                          {file.date_time ? file.date_time.split(' ')[0] : '-'}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {file.date_time ? file.date_time.split(' ')[1] : ''}
+                          {file.date_time ? file.date_time : '-'}
                         </p>
                       </div>
                       <div>

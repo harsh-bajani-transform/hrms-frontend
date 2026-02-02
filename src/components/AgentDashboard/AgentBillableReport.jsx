@@ -101,8 +101,9 @@ const BillableReport = () => {
       const exportData = trackers.map(row => {
         let formattedDateTime = '';
         if (row.date_time) {
-          const d = dayjs(row.date_time);
-          formattedDateTime = d.isValid() ? d.format('DD-MM-YYYY HH:mm') : row.date_time;
+          const d = new Date(row.date_time);
+          const pad = (n) => n.toString().padStart(2, '0');
+          formattedDateTime = `${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
         }
         return {
           'Date-Time': formattedDateTime,
@@ -376,7 +377,14 @@ const BillableReport = () => {
                     filteredDailyData.map((row, idx) => (
                       <tr key={idx} className="hover:bg-blue-50 transition group">
                         <td className="px-6 py-3 text-black font-medium whitespace-nowrap">{
-                          row.date_time ? dayjs(row.date_time).format('DD-MMM-YYYY HH:mm').toUpperCase() : '-'
+                          row.date_time
+                            ? (() => {
+                                const d = new Date(row.date_time);
+                                const pad = (n) => n.toString().padStart(2, '0');
+                                const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                                return `${pad(d.getUTCDate())}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+                              })()
+                            : '-'
                         }</td>
                         <td className="px-6 py-3 text-center text-black">-</td>
                         <td className="px-6 py-3 text-center text-black">{row.billable_hours ? Number(row.billable_hours).toFixed(2) : '-'}</td>

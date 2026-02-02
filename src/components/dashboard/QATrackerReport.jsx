@@ -291,7 +291,12 @@ const QATrackerReport = () => {
               >
                 <td className="px-5 py-3 align-middle whitespace-nowrap">
                   {tracker.date_time
-                    ? format(new Date(tracker.date_time), "dd/MM/yyyy HH:mm")
+                    ? (() => {
+                        const d = new Date(tracker.date_time);
+                        // Format as UTC, not local time
+                        const pad = (n) => n.toString().padStart(2, '0');
+                        return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+                      })()
                     : "-"}
                 </td>
                 <td className="px-5 py-3 align-middle font-semibold text-blue-700 whitespace-nowrap">
