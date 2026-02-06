@@ -306,7 +306,7 @@ const AdminDashboard = () => {
                       <FileText className="w-7 h-7 text-white" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold text-white tracking-tight">Latest QC Done Files</h2>
+                      <h2 className="text-2xl font-bold text-white tracking-tight">Latest QC Files</h2>
                       <p className="text-sm text-blue-100 mt-1 font-medium">Files recently reviewed for quality check</p>
                     </div>
                   </div>
@@ -365,11 +365,11 @@ const AdminDashboard = () => {
                               {file.date_time ? (() => {
                                 const date = new Date(file.date_time);
                                 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                const day = date.getDate();
-                                const month = monthNames[date.getMonth()];
-                                const year = date.getFullYear();
-                                let hours = date.getHours();
-                                const minutes = String(date.getMinutes()).padStart(2, '0');
+                                const day = date.getUTCDate();
+                                const month = monthNames[date.getUTCMonth()];
+                                const year = date.getUTCFullYear();
+                                let hours = date.getUTCHours();
+                                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
                                 const ampm = hours >= 12 ? 'PM' : 'AM';
                                 hours = hours % 12 || 12;
                                 return (

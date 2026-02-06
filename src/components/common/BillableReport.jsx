@@ -70,41 +70,51 @@ const BillableReport = ({ userId }) => {
         };
         
         const rowData = {
-          'User Name': row.user_name || '-',
-          'Date': dateDisplay,
-          'Worked Hours': formatNumber(row.total_billable_hours_day),
-          'Daily Required Hours': formatNumber(row.daily_required_hours)
+          'User Name': row.user_name || '-'
         };
         
-        // Add Team column only if not Assistant Manager
+        // Add Team column only if not Assistant Manager (right after User Name)
         if (!isAssistantManager) {
           rowData['Team'] = row.team_name || '-';
         }
+        
+        rowData['Date'] = dateDisplay;
+        rowData['Assign Hours'] = formatNumber(row.assigned_hours);
+        rowData['Worked Hours'] = formatNumber(row.total_billable_hours_day);
+        rowData['QC Score'] = formatNumber(row.qc_score);
+        rowData['Daily Required Hours'] = formatNumber(row.daily_required_hours);
         
         return rowData;
       });
 
       // Add total row for countable columns
       if (exportData.length > 0) {
+        const totalAssigned = exportData.reduce((sum, r) => sum + (parseFloat(r['Assign Hours']) || 0), 0);
         const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
         const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
+        const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
+        const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+        
         const totalRow = {
-          'User Name': 'Total',
-          'Date': '',
-          'Worked Hours': totalWorked.toFixed(2),
-          'Daily Required Hours': totalRequired.toFixed(2)
+          'User Name': 'TOTAL'
         };
         
         if (!isAssistantManager) {
           totalRow['Team'] = '';
         }
         
+        totalRow['Date'] = '';
+        totalRow['Assign Hours'] = totalAssigned.toFixed(2);
+        totalRow['Worked Hours'] = totalWorked.toFixed(2);
+        totalRow['QC Score'] = avgQC;
+        totalRow['Daily Required Hours'] = totalRequired.toFixed(2);
+        
         exportData.push(totalRow);
       }
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const colWidths = [
-        { wch: 18 }, // User Name
+        { wch: 20 }, // User Name
       ];
       
       if (!isAssistantManager) {
@@ -113,8 +123,10 @@ const BillableReport = ({ userId }) => {
       
       colWidths.push(
         { wch: 16 }, // Date
-        { wch: 16 }, // Worked Hours
-        { wch: 20 }  // Daily Required Hours
+        { wch: 16 }, // Assign Hours
+        { wch: 18 }, // Worked Hours
+        { wch: 12 }, // QC Score
+        { wch: 22 }  // Daily Required Hours
       );
       
       worksheet['!cols'] = colWidths;
@@ -136,17 +148,18 @@ const BillableReport = ({ userId }) => {
       }
       let exportData = usersArr.map(user => {
         const rowData = {
-          'User Name': user.user_name || '-',
-          'Billable Hour Delivered': user.total_billable_hours ? Number(user.total_billable_hours).toFixed(2) : '-',
-          'Monthly Goal': user.monthly_total_target ?? '-',
-          'Pending Target': user.pending_target ? Number(user.pending_target).toFixed(2) : '-',
-          'Avg. QC Score': user.avg_qc_score ? Number(user.avg_qc_score).toFixed(2) : '-',
+          'User Name': user.user_name || '-'
         };
         
-        // Add Team column only if not Assistant Manager
+        // Add Team column only if not Assistant Manager (right after User Name)
         if (!isAssistantManager) {
           rowData['Team'] = user.team_name || '-';
         }
+        
+        rowData['Billable Hour Delivered'] = user.total_billable_hours ? Number(user.total_billable_hours).toFixed(2) : '-';
+        rowData['Monthly Goal'] = user.monthly_total_target ?? '-';
+        rowData['Pending Target'] = user.pending_target ? Number(user.pending_target).toFixed(2) : '-';
+        rowData['Avg. QC Score'] = user.avg_qc_score ? Number(user.avg_qc_score).toFixed(2) : '-';
         
         return rowData;
       });
@@ -160,22 +173,23 @@ const BillableReport = ({ userId }) => {
         const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
         
         const totalRow = {
-          'User Name': 'Total',
-          'Billable Hour Delivered': totalBillable.toFixed(2),
-          'Monthly Goal': totalGoal.toFixed(2),
-          'Pending Target': totalPending.toFixed(2),
-          'Avg. QC Score': avgQC,
+          'User Name': 'TOTAL'
         };
         
         if (!isAssistantManager) {
           totalRow['Team'] = '';
         }
         
+        totalRow['Billable Hour Delivered'] = totalBillable.toFixed(2);
+        totalRow['Monthly Goal'] = totalGoal.toFixed(2);
+        totalRow['Pending Target'] = totalPending.toFixed(2);
+        totalRow['Avg. QC Score'] = avgQC;
+        
         exportData.push(totalRow);
       }
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const colWidths = [
-        { wch: 18 }, // User Name
+        { wch: 20 }, // User Name
       ];
       
       if (!isAssistantManager) {
@@ -183,9 +197,9 @@ const BillableReport = ({ userId }) => {
       }
       
       colWidths.push(
-        { wch: 24 }, // Billable Hour Delivered
+        { wch: 26 }, // Billable Hour Delivered
         { wch: 16 }, // Monthly Goal
-        { wch: 16 }, // Pending Target
+        { wch: 18 }, // Pending Target
         { wch: 16 }  // Avg. QC Score
       );
       
@@ -422,24 +436,36 @@ const BillableReport = ({ userId }) => {
         toast.error('No daily data found for this user/month');
         return;
       }
-      let exportData = dailyRows.map(row => ({
-        'Date-Time': row.date_time ?? row.date ?? '-',
-        'Assigned Hour': row.assign_hours !== undefined ? Number(row.assign_hours).toFixed(2) : (row.assignHours ?? row.assigned_hour ?? '-'),
-        'Worked Hours': row.billable_hours !== undefined ? Number(row.billable_hours).toFixed(2) : (row.workedHours ?? row.worked_hours ?? '-'),
-        'QC Score': 'qc_score' in row ? (row.qc_score !== null && row.qc_score !== undefined ? Number(row.qc_score).toFixed(2) : '-') : (row.qcScore ?? row.qc_score ?? '-'),
-        'Daily Required Hours': row.tenure_target !== undefined ? Number(row.tenure_target).toFixed(2) : (row.dailyRequiredHours ?? row.daily_required_hours ?? '-')
-      }));
+      let exportData = dailyRows.map(row => {
+        // Helper for formatting numbers
+        const formatNum = (val) => {
+          if (val === null || val === undefined || val === '') return '-';
+          const num = Number(val);
+          return isNaN(num) ? '-' : num.toFixed(2);
+        };
+        
+        return {
+          'Date-Time': row.date_time ?? row.date ?? '-',
+          'Assigned Hour': formatNum(row.assigned_hours ?? row.assign_hours),
+          'Worked Hours': formatNum(row.total_billable_hours_day ?? row.billable_hours),
+          'QC Score': formatNum(row.qc_score),
+          'Daily Required Hours': formatNum(row.daily_required_hours ?? row.tenure_target)
+        };
+      });
       // Add total row for countable columns
       if (exportData.length > 0) {
         const totalAssigned = exportData.reduce((sum, r) => sum + (parseFloat(r['Assigned Hour']) || 0), 0);
         const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
-        const totalQC = exportData.reduce((sum, r) => sum + (parseFloat(r['QC Score']) || 0), 0);
         const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
+        // For QC Score, calculate average instead of sum
+        const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
+        const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+        
         exportData.push({
-          'Date-Time': 'Total',
+          'Date-Time': 'TOTAL',
           'Assigned Hour': totalAssigned.toFixed(2),
           'Worked Hours': totalWorked.toFixed(2),
-          'QC Score': totalQC.toFixed(2),
+          'QC Score': avgQC,
           'Daily Required Hours': totalRequired.toFixed(2)
         });
       }

@@ -585,11 +585,11 @@ const QAAgentList = () => {
                                           {tracker.date_time ? (() => {
                                             const date = new Date(tracker.date_time);
                                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                            const day = date.getDate();
-                                            const month = monthNames[date.getMonth()];
-                                            const year = date.getFullYear();
-                                            let hours = date.getHours();
-                                            const minutes = String(date.getMinutes()).padStart(2, '0');
+                                            const day = date.getUTCDate();
+                                            const month = monthNames[date.getUTCMonth()];
+                                            const year = date.getUTCFullYear();
+                                            let hours = date.getUTCHours();
+                                            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
                                             const ampm = hours >= 12 ? 'PM' : 'AM';
                                             hours = hours % 12 || 12;
                                             return (

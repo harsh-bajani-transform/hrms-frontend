@@ -8,6 +8,8 @@ import { useDeviceInfo } from '../../hooks/useDeviceInfo';
 import { fileToBase64 } from "../../utils/fileToBase64";
 import { useAuth } from "../../context/AuthContext";
 import { log, logError } from "../../config/environment";
+import CustomSelect from "../common/CustomSelect";
+import { Briefcase, ListChecks } from "lucide-react";
 
 
 
@@ -361,18 +363,20 @@ const AgentDashboard = ({ embedded = false }) => {
                     Project Name
                     <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white"
+                  <CustomSelect
                     value={selectedProject}
-                    onChange={e => setSelectedProject(e.target.value)}
-                    onBlur={() => handleBlur('selectedProject')}
+                    onChange={(value) => {
+                      setSelectedProject(value);
+                      handleBlur('selectedProject');
+                    }}
+                    options={[
+                      { value: '', label: 'Select a project...' },
+                      ...projects.map(p => ({ value: String(p.project_id), label: p.project_name }))
+                    ]}
+                    icon={Briefcase}
+                    placeholder="Select a project..."
                     disabled={loadingProjects}
-                  >
-                    <option value="">Select a project...</option>
-                    {projects.map((p) => (
-                      <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
-                    ))}
-                  </select>
+                  />
                   {touched.selectedProject && errors.selectedProject && (
                     <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -396,16 +400,16 @@ const AgentDashboard = ({ embedded = false }) => {
                     Task Name
                     <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  <CustomSelect
                     value={selectedTask}
-                    onChange={e => {
-                      const value = String(e.target.value);
-                      setSelectedTask(value);
-                      log('[AgentDashboard] Task selected:', value);
+                    onChange={(value) => {
+                      const taskValue = String(value);
+                      setSelectedTask(taskValue);
+                      handleBlur('selectedTask');
+                      log('[AgentDashboard] Task selected:', taskValue);
                       setTimeout(() => {
                         const project = projects.find(p => String(p.project_id) === String(selectedProject));
-                        const task = project?.tasks?.find(t => String(t.task_id) === String(value));
+                        const task = project?.tasks?.find(t => String(t.task_id) === String(taskValue));
                         if (task && user?.user_tenure) {
                           setBaseTarget(Number(task.task_target) * Number(user.user_tenure));
                         } else {
@@ -413,14 +417,14 @@ const AgentDashboard = ({ embedded = false }) => {
                         }
                       }, 0);
                     }}
-                    onBlur={() => handleBlur('selectedTask')}
+                    options={[
+                      { value: '', label: 'Select a task...' },
+                      ...tasks.map(t => ({ value: String(t.task_id), label: t.task_name || t.label }))
+                    ]}
+                    icon={ListChecks}
+                    placeholder="Select a task..."
                     disabled={!selectedProject || loadingTasks}
-                  >
-                    <option value="">Select a task...</option>
-                    {tasks.map((t) => (
-                      <option key={t.task_id} value={t.task_id}>{t.task_name || t.label}</option>
-                    ))}
-                  </select>
+                  />
                   {touched.selectedTask && errors.selectedTask && (
                     <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

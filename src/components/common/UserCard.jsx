@@ -452,23 +452,33 @@ export default function UserCard({
                     // Use filteredRows (already filtered by date range)
                     let exportData = filteredRows.map(row => ({
                       'Date': formatDateTime(row.date_time ?? row.date),
+                      'Assign Hours': formatNumber(row.assigned_hours ?? row.assign_hours ?? row.assignHours),
                       'Worked Hours': formatNumber(row.billable_hours ?? row.workedHours ?? row.worked_hours),
+                      'QC Score': formatNumber(row.qc_score ?? row.qcScore),
                       'Daily Required Hours': formatNumber(row.tenure_target ?? row.dailyRequiredHours ?? row.daily_required_hours)
                     }));
                     if (exportData.length > 0) {
+                      const totalAssigned = exportData.reduce((sum, r) => sum + (parseFloat(r['Assign Hours']) || 0), 0);
                       const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
                       const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
+                      const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
+                      const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+                      
                       exportData.push({
-                        'Date': 'Total',
+                        'Date': 'TOTAL',
+                        'Assign Hours': totalAssigned.toFixed(2),
                         'Worked Hours': totalWorked.toFixed(2),
+                        'QC Score': avgQC,
                         'Daily Required Hours': totalRequired.toFixed(2)
                       });
                     }
                     const worksheet = XLSX.utils.json_to_sheet(exportData);
                     worksheet['!cols'] = [
                       { wch: 16 }, // Date
+                      { wch: 16 }, // Assign Hours
                       { wch: 16 }, // Worked Hours
-                      { wch: 20 }  // Daily Required Hours
+                      { wch: 12 }, // QC Score
+                      { wch: 22 }  // Daily Required Hours
                     ];
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, user.user_name || 'User');

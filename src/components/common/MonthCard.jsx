@@ -93,7 +93,7 @@ export default function MonthCard({ month, users, onExport, onExportMonth, teamO
                     <th className="px-4 py-3 text-center font-bold text-blue-700">Monthly Goal</th>
                     <th className="px-4 py-3 text-center font-bold text-blue-700">Pending</th>
                     <th className="px-4 py-3 text-center font-bold text-blue-700">Avg. QC</th>
-                    <th className="px-4 py-3 text-center font-bold text-blue-700">Action</th>
+                    {/* <th className="px-4 py-3 text-center font-bold text-blue-700">Action</th> */}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-blue-100">
@@ -112,7 +112,7 @@ export default function MonthCard({ month, users, onExport, onExportMonth, teamO
                         <td className="px-4 py-3 text-center text-slate-800">{user.monthly_total_target ?? '-'}</td>
                         <td className="px-4 py-3 text-center text-slate-800">{formatNumber(user.pending_target)}</td>
                         <td className="px-4 py-3 text-center text-slate-800">{formatNumber(user.avg_qc_score)}</td>
-                        <td className="px-4 py-3 text-center">
+                        {/* <td className="px-4 py-3 text-center">
                           <button
                             onClick={() => onExport(user)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-xs font-semibold shadow-sm hover:shadow-md transition-all duration-200"
@@ -121,7 +121,7 @@ export default function MonthCard({ month, users, onExport, onExportMonth, teamO
                             <Download className="w-3.5 h-3.5" />
                             Export
                           </button>
-                        </td>
+                        </td> */}
                       </tr>
                     );
                   })}

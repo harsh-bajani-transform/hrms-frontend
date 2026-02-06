@@ -19,37 +19,49 @@ const BillableReport = () => {
   // Export the visible monthly report table (with filters applied)
   const handleExportMonthlyTable = () => {
       try {
-        const exportData = monthlySummaryData.map(row => ({
-          'Year & Month': row.month_year,
-          'Billable Hours Delivered': row.total_billable_hours
-            ? Number(row.total_billable_hours).toFixed(2)
-            : (row.total_billable_hours_month
-              ? Number(row.total_billable_hours_month).toFixed(2)
-              : '-'),
-          'Monthly Goal': row.monthly_total_target ?? row.monthly_goal,
-          'Pending Target': row.pending_target ? Number(row.pending_target).toFixed(2) : '-',
-          'Avg. QC Score': row.avg_qc_score ?? '-',
-        }));
+        console.log('Exporting monthly data:', monthlySummaryData);
+        
+        if (monthlySummaryData.length === 0) {
+          toast.error('No data to export');
+          return;
+        }
+        
+        const exportData = monthlySummaryData.map(row => {
+          // Helper to format numbers safely
+          const formatNum = (val) => {
+            if (val === null || val === undefined || val === '') return '-';
+            const num = Number(val);
+            return isNaN(num) ? '-' : num.toFixed(2);
+          };
+          
+          return {
+            'Year & Month': row.month_year || '-',
+            'Billable Hours Delivered': formatNum(row.total_billable_hours ?? row.total_billable_hours_month),
+            'Monthly Goal': row.monthly_total_target ?? row.monthly_goal ?? '-',
+            'Pending Target': formatNum(row.pending_target),
+            'Avg. QC Score': formatNum(row.avg_qc_score),
+          };
+        });
 
         // Calculate totals
-        const totalBillable = exportData.reduce((sum, r) => sum + (Number(r['Billable Hours Delivered']) || 0), 0);
-        const totalGoal = exportData.reduce((sum, r) => sum + (Number(r['Monthly Goal']) || 0), 0);
-        const totalPending = exportData.reduce((sum, r) => sum + (Number(r['Pending Target']) || 0), 0);
-        const qcScores = exportData.map(r => Number(r['Avg. QC Score'])).filter(v => !isNaN(v));
+        const totalBillable = exportData.reduce((sum, r) => sum + (parseFloat(r['Billable Hours Delivered']) || 0), 0);
+        const totalGoal = exportData.reduce((sum, r) => sum + (parseFloat(r['Monthly Goal']) || 0), 0);
+        const totalPending = exportData.reduce((sum, r) => sum + (parseFloat(r['Pending Target']) || 0), 0);
+        const qcScores = exportData.map(r => parseFloat(r['Avg. QC Score'])).filter(v => !isNaN(v));
         const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
 
         exportData.push({
           'Year & Month': 'TOTAL',
-          'Billable Hours Delivered': totalBillable,
-          'Monthly Goal': totalGoal,
-          'Pending Target': totalPending,
+          'Billable Hours Delivered': totalBillable.toFixed(2),
+          'Monthly Goal': totalGoal.toFixed(2),
+          'Pending Target': totalPending.toFixed(2),
           'Avg. QC Score': avgQC,
         });
 
         const worksheet = XLSX.utils.json_to_sheet(exportData);
         worksheet['!cols'] = [
           { wch: 16 },
-          { wch: 24 },
+          { wch: 26 },
           { wch: 16 },
           { wch: 16 },
           { wch: 16 },
@@ -101,7 +113,7 @@ const BillableReport = () => {
         logged_in_user_id: user?.user_id,
         month_year: monthYear
       };
-      const res = await axios.post("/python/tracker/view_daily", payload);
+      const res = await axios.post("/tracker/view_daily", payload);
       console.log('Export month daily API response:', res.data);
       
       // Access trackers the same way as daily report fetch
@@ -131,16 +143,16 @@ const BillableReport = () => {
         };
       });
       // Calculate totals for countable columns
-      const totalWorked = exportData.reduce((sum, r) => sum + (Number(r['Worked Hours']) || 0), 0);
-      const totalRequired = exportData.reduce((sum, r) => sum + (Number(r['Daily Required Hours']) || 0), 0);
-      const qcScores = exportData.map(r => Number(r['QC score'])).filter(v => !isNaN(v));
+      const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
+      const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
+      const qcScores = exportData.map(r => parseFloat(r['QC score'])).filter(v => !isNaN(v));
       const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
       exportData.push({
         'Date-Time': 'TOTAL',
         'Assign Hours': '-',
-        'Worked Hours': totalWorked,
+        'Worked Hours': totalWorked.toFixed(2),
         'QC score': avgQC,
-        'Daily Required Hours': totalRequired,
+        'Daily Required Hours': totalRequired.toFixed(2),
       });
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       worksheet['!cols'] = [
@@ -239,7 +251,7 @@ const BillableReport = () => {
           ...(endDate && { date_to: endDate }),
         };
         // Call the correct API endpoint
-        const res = await axios.post("/python/tracker/view_daily", payload);
+        const res = await axios.post("/tracker/view_daily", payload);
         console.log('Daily report API response:', res.data);
         // Fix: Use trackers array from response
         let data = res.data?.data?.trackers;
@@ -281,6 +293,8 @@ const BillableReport = () => {
         }
         // Use the fetchMonthlyBillableReport service function
         const res = await fetchMonthlyBillableReport(payload);
+        console.log('Monthly report API response:', res);
+        console.log('Monthly report data:', res.data);
         setMonthlySummaryData(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         setErrorMonthly(getFriendlyErrorMessage(err));
@@ -297,6 +311,11 @@ const BillableReport = () => {
   // Export filtered daily data to Excel with totals
   const handleExportDailyExcel = () => {
     try {
+      if (filteredDailyData.length === 0) {
+        toast.error('No data to export');
+        return;
+      }
+      
       // Format and prepare export data
       const exportData = filteredDailyData.map(row => {
         // Only show date part from work_date
@@ -317,7 +336,30 @@ const BillableReport = () => {
         };
       });
 
+      // Calculate totals
+      const totalAssigned = exportData.reduce((sum, r) => sum + (parseFloat(r['Assign Hours']) || 0), 0);
+      const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
+      const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
+      const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
+      const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+
+      // Add totals row
+      exportData.push({
+        'Date': 'TOTAL',
+        'Assign Hours': totalAssigned.toFixed(2),
+        'Worked Hours': totalWorked.toFixed(2),
+        'QC Score': avgQC,
+        'Daily Required Hours': totalRequired.toFixed(2),
+      });
+
       const worksheet = XLSX.utils.json_to_sheet(exportData);
+      worksheet['!cols'] = [
+        { wch: 16 },  // Date
+        { wch: 16 },  // Assign Hours
+        { wch: 16 },  // Worked Hours
+        { wch: 12 },  // QC Score
+        { wch: 22 },  // Daily Required Hours
+      ];
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Daily Report');
       XLSX.writeFile(workbook, 'Daily_Report.xlsx');
@@ -814,7 +856,7 @@ const BillableReport = () => {
                       <th className="px-6 py-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider">Monthly Goal</th>
                       <th className="px-6 py-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider">Pending Target</th>
                       <th className="px-6 py-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider">Avg. QC Score</th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider">Actions</th>
+                      {/* <th className="px-6 py-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider">Actions</th> */}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-blue-50">
@@ -826,7 +868,7 @@ const BillableReport = () => {
                           <td className="px-6 py-4 text-center text-gray-900 font-medium">{row.monthly_total_target ?? row.monthly_goal}</td>
                           <td className="px-6 py-4 text-center text-gray-900 font-medium">{row.pending_target ? Number(row.pending_target).toFixed(2) : '-'}</td>
                           <td className="px-6 py-4 text-center text-gray-900 font-medium">{row.avg_qc_score ?? '-'}</td>
-                          <td className="px-6 py-4 text-center">
+                          {/* <td className="px-6 py-4 text-center">
                             <button
                               onClick={() => handleExportMonthDailyExcel(row.month_year)}
                               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200"
@@ -835,12 +877,12 @@ const BillableReport = () => {
                               <Download className="w-4 h-4" />
                               <span>Export</span>
                             </button>
-                          </td>
+                          </td> */}
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-gray-400 text-sm">
+                        <td colSpan={5} className="px-6 py-12 text-center text-gray-400 text-sm">
                           <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                           <p className="font-medium">No data available</p>
                           <p className="text-xs mt-1">Try adjusting your filters</p>
