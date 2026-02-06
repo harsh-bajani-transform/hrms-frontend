@@ -73,11 +73,6 @@ const BillableReport = ({ userId }) => {
           'User Name': row.user_name || '-'
         };
         
-        // Add Team column only if not Assistant Manager (right after User Name)
-        if (!isAssistantManager) {
-          rowData['Team'] = row.team_name || '-';
-        }
-        
         rowData['Date'] = dateDisplay;
         rowData['Assign Hours'] = formatNumber(row.assigned_hours);
         rowData['Worked Hours'] = formatNumber(row.total_billable_hours_day);
@@ -99,10 +94,6 @@ const BillableReport = ({ userId }) => {
           'User Name': 'TOTAL'
         };
         
-        if (!isAssistantManager) {
-          totalRow['Team'] = '';
-        }
-        
         totalRow['Date'] = '';
         totalRow['Assign Hours'] = totalAssigned.toFixed(2);
         totalRow['Worked Hours'] = totalWorked.toFixed(2);
@@ -115,19 +106,12 @@ const BillableReport = ({ userId }) => {
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const colWidths = [
         { wch: 20 }, // User Name
-      ];
-      
-      if (!isAssistantManager) {
-        colWidths.push({ wch: 16 }); // Team
-      }
-      
-      colWidths.push(
         { wch: 16 }, // Date
         { wch: 16 }, // Assign Hours
         { wch: 18 }, // Worked Hours
         { wch: 12 }, // QC Score
         { wch: 22 }  // Daily Required Hours
-      );
+      ];
       
       worksheet['!cols'] = colWidths;
       const workbook = XLSX.utils.book_new();
