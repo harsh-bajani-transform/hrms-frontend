@@ -15,6 +15,9 @@ const EditProjectModal = ({
 	isSubmitting = false,
 	handleProjectFilesChange,
 	handleRemoveProjectFile,
+	projectFiles,
+	onFieldChange,
+	clearFieldError,
 }) => {
 	const fileInputRef = useRef(null);
 	const [dropdownOpen, setDropdownOpen] = useState({
@@ -23,21 +26,16 @@ const EditProjectModal = ({
 		teams: false,
 	});
 	const [editProject, setEditProject] = useState(null);
-	const [projectFiles, setProjectFiles] = useState(null);
 
 	// Initialize editProject from project prop
-	// Wait for dropdown data to be available before setting editProject
 	useEffect(() => {
-		if (
-			project &&
-			Array.isArray(assistantManagers) && assistantManagers.length > 0 &&
-			Array.isArray(qaManagers) && qaManagers.length > 0 &&
-			Array.isArray(teams) && teams.length > 0
-		) {
+		if (project) {
+			console.log('[EditProjectModal] ========== INITIALIZING EDIT PROJECT ==========');
 			console.log('[EditProjectModal][DEBUG] Incoming project prop:', project);
-			console.log('[EditProjectModal][DEBUG] assistantManagers:', assistantManagers);
-			console.log('[EditProjectModal][DEBUG] qaManagers:', qaManagers);
-			console.log('[EditProjectModal][DEBUG] teams:', teams);
+			console.log('[EditProjectModal][DEBUG] Incoming projectManagers prop:', projectManagers);
+			console.log('[EditProjectModal][DEBUG] Incoming assistantManagers prop:', assistantManagers);
+			console.log('[EditProjectModal][DEBUG] Incoming qaManagers prop:', qaManagers);
+			console.log('[EditProjectModal][DEBUG] Incoming teams prop:', teams);
 
 			// Helper to extract string IDs from any array of IDs or objects
 			const extractIds = (arr, key = 'user_id') => {
@@ -49,19 +47,19 @@ const EditProjectModal = ({
 			};
 
 			// Defensive: force all dropdown options to string IDs (local variables)
-			const normalizedAssistantManagers = Array.isArray(assistantManagers)
+			const normalizedAssistantManagers = Array.isArray(assistantManagers) && assistantManagers.length > 0
 				? assistantManagers.map(item => ({
 						id: String(item.user_id ?? item.team_id ?? item.id),
 						label: item.user_name || item.label || item.team_name || item.name || String(item.user_id ?? item.team_id ?? item.id)
 					}))
 				: [];
-			const normalizedQaManagers = Array.isArray(qaManagers)
+			const normalizedQaManagers = Array.isArray(qaManagers) && qaManagers.length > 0
 				? qaManagers.map(item => ({
 						id: String(item.user_id ?? item.team_id ?? item.id),
 						label: item.user_name || item.label || item.team_name || item.name || String(item.user_id ?? item.team_id ?? item.id)
 					}))
 				: [];
-			const normalizedTeams = Array.isArray(teams)
+			const normalizedTeams = Array.isArray(teams) && teams.length > 0
 				? teams.map(item => ({
 						id: String(item.user_id ?? item.team_id ?? item.id),
 						label: item.user_name || item.label || item.team_name || item.name || String(item.user_id ?? item.team_id ?? item.id)
@@ -149,6 +147,7 @@ const EditProjectModal = ({
 				teamIds,
 				projectManagerId: String(project.projectManagerId || project.project_manager_id || ""),
 				name: project.name || project.project_name || "",
+				code: project.code || project.project_code || "",
 				description: project.description || project.project_description || "",
 			};
 
@@ -156,7 +155,6 @@ const EditProjectModal = ({
 
 			setTimeout(() => {
 				setEditProject(newProject);
-				if (project.project_file) setProjectFiles({ name: project.project_file });
 			}, 0);
 		}
 	}, [project, assistantManagers, qaManagers, teams]);
@@ -179,6 +177,29 @@ const EditProjectModal = ({
 		}
 		
 		setEditProject(prev => ({ ...prev, [field]: updatedValues }));
+		// Sync with parent
+		if (onFieldChange) {
+			onFieldChange(field, updatedValues);
+		}
+	};
+
+	const handleSelectAll = (field, allItems, isChecked) => {
+		if (!editProject) return;
+		
+		if (isChecked) {
+			// Select all items
+			const allIds = allItems.map(item => String(item.id));
+			setEditProject(prev => ({ ...prev, [field]: allIds }));
+			if (onFieldChange) {
+				onFieldChange(field, allIds);
+			}
+		} else {
+			// Deselect all items
+			setEditProject(prev => ({ ...prev, [field]: [] }));
+			if (onFieldChange) {
+				onFieldChange(field, []);
+			}
+		}
 	};
 
 	// Helper to normalize dropdown data for lookup by id
@@ -206,11 +227,10 @@ const EditProjectModal = ({
 	};
 
 	const handleFileChange = (e) => {
-		const file = e.target.files?.[0];
-		if (file) {
-			log('[EditProjectModal] File selected:', file.name);
-			setProjectFiles(file);
-			handleProjectFilesChange && handleProjectFilesChange(file);
+		const files = e.target.files;
+		if (files && files.length > 0) {
+			log('[EditProjectModal] File selected:', files[0].name);
+			handleProjectFilesChange && handleProjectFilesChange(files);
 		}
 		e.target.value = "";
 	};
@@ -219,10 +239,9 @@ const EditProjectModal = ({
 		fileInputRef.current.click();
 	};
 
-	const handleRemoveFile = () => {
-		log('[EditProjectModal] Removing file');
-		setProjectFiles(null);
-		handleRemoveProjectFile && handleRemoveProjectFile();
+	const handleRemoveFile = (index) => {
+		log('[EditProjectModal] Removing file at index:', index);
+		handleRemoveProjectFile && handleRemoveProjectFile(index);
 	};
 
 	if (!editProject) {
@@ -262,6 +281,28 @@ const EditProjectModal = ({
 								required
 							/>
 							{formErrors.name && <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>}
+						</div>
+						{/* Project Code */}
+						<div>
+							<label className="block text-sm font-semibold text-gray-700 mb-2">Project Code <span className="text-red-600">*</span></label>
+							<input
+								type="text"
+								className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+								placeholder="e.g. MOVE"
+								value={editProject.code || ''}
+								onChange={e => {
+									const uppercaseValue = e.target.value.toUpperCase();
+									setEditProject(prev => ({ ...prev, code: uppercaseValue }));
+									if (clearFieldError) {
+										clearFieldError('code');
+									}
+									if (onFieldChange) {
+										onFieldChange('code', uppercaseValue);
+									}
+								}}
+								required
+							/>
+							{formErrors.code && <p className="mt-1 text-xs text-red-600">{formErrors.code}</p>}
 						</div>
 						{/* Description */}
 						<div>
@@ -317,8 +358,17 @@ const EditProjectModal = ({
 									<div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
 										{processedAssistantManagers.length === 0 && (
 											<div className="px-3 py-2 text-sm text-slate-500">No assistant managers available</div>
-										)}
-										{[
+										)}									{processedAssistantManagers.length > 0 && (
+										<label className="flex items-center px-3 py-2 hover:bg-green-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
+											<input
+												type="checkbox"
+												checked={processedAssistantManagers.length > 0 && (editProject.assistantManagerIds || []).length === processedAssistantManagers.length}
+												onChange={(e) => handleSelectAll('assistantManagerIds', processedAssistantManagers, e.target.checked)}
+												className="w-4 h-4 text-green-600 border-slate-300 rounded mr-2"
+											/>
+											<span className="font-semibold text-slate-900">Select All</span>
+										</label>
+									)}										{[
 											// Add selected IDs not in processedAssistantManagers
 											...editProject.assistantManagerIds
 												.filter(id => !processedAssistantManagers.some(am => am.id === id))
@@ -389,8 +439,17 @@ const EditProjectModal = ({
 									<div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
 										{processedQaManagers.length === 0 && (
 											<div className="px-3 py-2 text-sm text-slate-500">No QA managers available</div>
-										)}
-										{[
+										)}									{processedQaManagers.length > 0 && (
+										<label className="flex items-center px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
+											<input
+												type="checkbox"
+												checked={processedQaManagers.length > 0 && (editProject.qaManagerIds || []).length === processedQaManagers.length}
+												onChange={(e) => handleSelectAll('qaManagerIds', processedQaManagers, e.target.checked)}
+												className="w-4 h-4 text-purple-600 border-slate-300 rounded mr-2"
+											/>
+											<span className="font-semibold text-slate-900">Select All</span>
+										</label>
+									)}										{[
 											...editProject.qaManagerIds
 												.filter(id => !processedQaManagers.some(qa => qa.id === id))
 												.map(id => ({ id, label: `Unknown (${id})` })),
@@ -450,8 +509,17 @@ const EditProjectModal = ({
 									<div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
 										{processedTeams.length === 0 && (
 											<div className="px-3 py-2 text-sm text-slate-500">No agents available</div>
-										)}
-										{[
+										)}									{processedTeams.length > 0 && (
+										<label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
+											<input
+												type="checkbox"
+												checked={processedTeams.length > 0 && (editProject.teamIds || []).length === processedTeams.length}
+												onChange={(e) => handleSelectAll('teamIds', processedTeams, e.target.checked)}
+												className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
+											/>
+											<span className="font-semibold text-slate-900">Select All</span>
+										</label>
+									)}										{[
 											...editProject.teamIds
 												.filter(id => !processedTeams.some(team => team.id === id))
 												.map(id => ({ id, label: `Unknown (${id})` })),
@@ -491,22 +559,63 @@ const EditProjectModal = ({
 						{/* Project Files Upload */}
 						<div className="md:col-span-1">
 							<label className="block text-sm font-semibold text-gray-700 mb-2">Project Files</label>
-							<input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+							<input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} multiple />
 							<div className="flex items-center gap-3">
 								<div onClick={triggerFileInput} className="flex items-center justify-between w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus-within:ring-2 focus-within:ring-blue-500">
 									<div className="flex items-center gap-2 text-gray-600">
 										<Upload className="w-4 h-4" />
-										{projectFiles ? <span>{projectFiles.name}</span> : <span>Select project files</span>}
+										{projectFiles && projectFiles.length > 0 ? (
+											<span>{projectFiles.length} file(s) selected</span>
+										) : (
+											<span>Select project files</span>
+										)}
 									</div>
 									<span className="text-blue-600 text-xs font-medium">Browse</span>
 								</div>
 							</div>
-							{projectFiles && (
+							{projectFiles && projectFiles.length > 0 && (
 								<div className="mt-1 space-y-1">
-									<div className="flex items-center justify-between px-3 py-1 border border-gray-200 rounded-md text-sm bg-white">
-										<span className="truncate text-red-600 text-xs max-w-[85%]">{projectFiles.name}</span>
-										<button type="button" onClick={handleRemoveFile} className="text-gray-400 hover:text-red-500" title="Remove file"><XCircle className="w-4 h-4" /></button>
-									</div>
+									{projectFiles.map((file, index) => {
+										const isExistingFile = file.isExisting || !(file instanceof File);
+										return (
+											<div key={`${file.name}-${index}`} className="flex items-center justify-between px-3 py-1 border border-gray-200 rounded-md text-sm bg-white gap-2">
+												{isExistingFile && file.url ? (
+													<a
+														href={file.url}
+														target="_blank"
+														rel="noopener noreferrer"
+														className="truncate text-xs max-w-[70%] text-blue-600 hover:underline"
+														title="Click to view file"
+													>
+														{file.name}
+													</a>
+												) : (
+													<span className="truncate text-xs max-w-[70%] text-gray-700">
+														{file.name}
+													</span>
+												)}
+												<div className="flex items-center gap-2">
+													{isExistingFile && (
+														<span className="text-green-600 text-xs font-medium whitespace-nowrap">Existing</span>
+													)}
+													{!isExistingFile && (
+														<span className="text-orange-600 text-xs font-medium whitespace-nowrap">New</span>
+													)}
+													<button
+														type="button"
+														onClick={(e) => {
+															e.stopPropagation();
+															handleRemoveFile(index);
+														}}
+														className="text-gray-400 hover:text-red-500 flex-shrink-0"
+														title="Remove file"
+													>
+														<XCircle className="w-4 h-4" />
+													</button>
+												</div>
+											</div>
+										);
+									})}
 								</div>
 							)}
 						</div>

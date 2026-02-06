@@ -20,10 +20,17 @@ const OverviewTab = ({ analytics, hourlyChartData, isAgent, isQA, dateRange: ext
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  // Local filter state for agent date range
+  
+  // Helper to get today's date in YYYY-MM-DD format
+  const getTodayDateString = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+  
+  // Local filter state for agent date range - default to today
   const [agentFilter, setAgentFilter] = useState({
-    start: externalDateRange?.start || '',
-    end: externalDateRange?.end || '',
+    start: externalDateRange?.start || getTodayDateString(),
+    end: externalDateRange?.end || getTodayDateString(),
   });
 
   // QA dashboard filter states
@@ -127,7 +134,7 @@ const OverviewTab = ({ analytics, hourlyChartData, isAgent, isQA, dateRange: ext
   // Note: API returns only the logged-in agent's data based on logged_in_user_id
   const agentStats = {
     totalBillableHours: parseFloat(dashboardData?.summary?.total_billable_hours ?? dashboardData?.summary?.total_production ?? 0),
-    qcScore: parseFloat(dashboardData?.summary?.qc_score || 0),
+    qcScore: parseFloat((dashboardData?.summary?.avg_qc_score ?? dashboardData?.summary?.qc_score) || 0),
     taskCount: parseInt(dashboardData?.summary?.task_count || 0),
     projectCount: parseInt(dashboardData?.summary?.project_count || 0),
   };
@@ -183,10 +190,9 @@ const OverviewTab = ({ analytics, hourlyChartData, isAgent, isQA, dateRange: ext
 
     return (
       <div className="space-y-4 md:space-y-6 animate-fade-in">
-        {/* Agent tab navigation above counting cards */}
+        {/* Agent tab navigation above all content */}
         {isAgent && (
           <div className="max-w-6xl mx-auto w-full">
-            <AgentFilterBar dateRange={agentFilter} setDateRange={setAgentFilter} />
             <AgentTabsNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
           </div>
         )}
@@ -253,6 +259,9 @@ const OverviewTab = ({ analytics, hourlyChartData, isAgent, isQA, dateRange: ext
           </div>
         ) : isAgent && activeTab === 'overview' ? (
           <div className="max-w-6xl mx-auto w-full">
+            {/* Date Range Filter - Only for Overview Tab */}
+            <AgentFilterBar dateRange={agentFilter} setDateRange={setAgentFilter} />
+            
             {/* Counting cards for agent */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-[120px]">
               <StatCard
@@ -274,7 +283,7 @@ const OverviewTab = ({ analytics, hourlyChartData, isAgent, isQA, dateRange: ext
                 className="min-w-0 h-32 flex flex-col justify-center"
               />
               <StatCard
-                title="Performance"
+                title="Task Count"
                 value={agentStats.taskCount.toLocaleString()}
                 subtext="Tasks assigned"
                 icon={TrendingUp}
@@ -294,36 +303,73 @@ const OverviewTab = ({ analytics, hourlyChartData, isAgent, isQA, dateRange: ext
             </div>
 
             {/* Project Billable Hours Card for agent overview (dynamic, per project) */}
-            <div className="w-full mt-8 px-0">
-              <div className="bg-linear-to-r from-blue-600 to-blue-700 px-10 py-6">
-                <div className="flex items-center gap-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-briefcase w-5 h-5 text-white" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg>
-                  <h3 className="text-lg font-semibold text-white">Project Billable Hours</h3>
+            <div className="w-full mt-6">
+              <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-4 border-b border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-600 rounded-lg shadow-sm">
+                      <Briefcase className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Project Billable Hours</h3>
+                      <p className="text-xs text-slate-600 font-medium mt-0.5">Hours logged per project in selected date range</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-blue-100 text-sm mt-1">Hours logged per project in selected date range</p>
-              </div>
-              <div className="p-10">
-                <div className="space-y-3">
+                
+                {/* Projects List */}
+                <div className="p-6">
                   {agentProjects.length === 0 ? (
-                    <div className="text-center text-slate-500">No project data available for this date range.</div>
-                  ) : (
-                    agentProjects.map((project, idx) => (
-                      <div key={project.project_id || idx} className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-briefcase w-5 h-5 text-blue-600" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg>
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-slate-800">{project.project_name || 'Unnamed Project'}</h4>
-                            <p className="text-xs text-slate-500">{project.project_code || 'N/A'}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-blue-600">{parseFloat(project.billable_hours ?? project.total_billable_hours ?? 0).toFixed(2)}</div>
-                          <p className="text-xs text-slate-500">Hours</p>
-                        </div>
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Briefcase className="w-8 h-8 text-slate-400" />
                       </div>
-                    ))
+                      <p className="text-slate-500 font-medium">No project data available for this date range</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {agentProjects.map((project, idx) => (
+                        <div 
+                          key={project.project_id || idx} 
+                          className="relative overflow-hidden bg-white rounded-xl shadow-md hover:shadow-lg border-2 border-slate-200 hover:border-blue-300 transition-all duration-300 transform hover:-translate-y-1"
+                        >
+                          {/* Subtle decorative element */}
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full -translate-y-8 translate-x-8"></div>
+                          
+                          <div className="relative p-3 flex items-center justify-between gap-3">
+                            {/* Content Container */}
+                            <div className="flex-1 min-w-0 z-10">
+                              {/* Label */}
+                              <p className="text-[9px] font-bold uppercase tracking-wide truncate text-slate-600 mb-0.5">
+                                Project
+                              </p>
+                              
+                              {/* Project Name */}
+                              <h3 className="text-sm font-extrabold truncate text-slate-900">
+                                {project.project_name || 'Unnamed Project'}
+                              </h3>
+                              
+                              {/* Project Code */}
+                              <p className="text-[10px] font-semibold truncate text-slate-500 mt-0.5">
+                                {project.project_code || 'N/A'}
+                              </p>
+                            </div>
+
+                            {/* Hours Display - Compact */}
+                            <div className="flex flex-col items-center z-10 flex-shrink-0">
+                              <div className="p-1.5 rounded-lg shadow-sm bg-blue-100 mb-1">
+                                <Briefcase className="w-4 h-4 text-blue-600" />
+                              </div>
+                              <div className="text-lg font-extrabold text-blue-600">
+                                {parseFloat(project.billable_hours ?? project.total_billable_hours ?? 0).toFixed(2)}
+                              </div>
+                              <p className="text-[9px] text-slate-500 font-semibold">Hours</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

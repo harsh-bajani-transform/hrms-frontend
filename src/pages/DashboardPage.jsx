@@ -13,6 +13,7 @@ import QATrackerReport from '../components/dashboard/QATrackerReport';
 import QAAgentList from '../components/dashboard/QAAgentList';
 import QAAgentDashboard from '../components/QAAgentDashboard/QAAgentDashboard';
 import AssistantManagerDashboard from '../components/dashboard/AssistantManagerDashboard';
+import AdminDashboard from '../components/dashboard/AdminDashboard';
 import { useAuth } from '../context/AuthContext'; // Updated to use AuthContext
 import { useDeviceInfo } from '../hooks/useDeviceInfo';
 import { useUserDropdowns } from '../hooks/useUserDropdowns';
@@ -200,8 +201,12 @@ const DashboardPage = ({
             designation_id: u.designation_id ?? null,
             reportingManager: u.project_manager || '',
             project_manager_name: u.project_manager || '',
+            project_manager_names: u.project_manager_names || u.project_manager || '',
+            project_managers: u.project_managers || [],
             project_manager_id: u.project_manager_id ?? null,
             assistantManager: u.assistant_manager_id || u.asst_manager || '',
+            asst_manager_names: u.asst_manager_names || u.asst_manager || '',
+            asst_managers: u.asst_managers || [],
             qualityAnalyst: u.qa_id || u.qa || '',
             team: u.team_id || u.team || '',
             team_name: u.team_name || '',
@@ -259,41 +264,6 @@ const DashboardPage = ({
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-10">
-      {/* Show FilterBar for all tabs except dataentry, manage, QA, QA special views, and agent Billable Report */}
-      {activeTab !== 'dataentry' && activeTab !== 'manage' && !viewParam && !isAssistantManager && !isQA && !(isAgent && activeTab === 'billable_report') && (
-        <FilterBar
-            isAgent={isAgent}
-            isQA={isQA}
-            selectedTask={selectedTask}
-            setSelectedTask={setSelectedTask}
-            comparisonMode={comparisonMode}
-            setComparisonMode={setComparisonMode}
-            dateRange={{
-              start: dateRange.start || '',
-              end: dateRange.end || ''
-            }}
-            handleDateRangeChange={handleDateRangeChange}
-            allTasks={allTasks}
-          />
-      )}
-
-        {/* Show TabsNavigation for non-agents, non-QA, non-AssistantManager */}
-        {!isAgent && !isQA && !isAssistantManager && activeTab !== 'manage' && (
-          <TabsNavigation
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            isAgent={isAgent}
-            isQA={isQA}
-            isAdmin={isAdmin}
-            isAssistantManager={isAssistantManager}
-            isProjectManager={isProjectManager}
-            isSuperAdmin={isSuperAdmin}
-            canViewIncentivesTab={canViewIncentivesTab}
-            canViewAdherence={canViewAdherence}
-            canAccessManage={canAccessManage}
-          />
-        )}
-
       {/* Debug: Show current active tab */}
       {console.log('[DashboardPage Render] activeTab:', activeTab)}
 
@@ -328,14 +298,7 @@ const DashboardPage = ({
         };
         const emptyHourlyChartData = [];
         if (isAdmin || isSuperAdmin || isProjectManager) {
-          return (
-            <OverviewTab
-              analytics={emptyAnalytics}
-              hourlyChartData={emptyHourlyChartData}
-              isAgent={isAgent}
-              dateRange={rangeToSend}
-            />
-          );
+          return <AdminDashboard />;
         } else if (isAssistantManager) {
           return <AssistantManagerDashboard />;
         } else if (isQA) {

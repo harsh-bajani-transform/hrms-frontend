@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, FolderKanban, Plus, Search, Filter, Briefcase } from 'lucide-react';
 import { useAuth } from "../../../../context/AuthContext";
 import { useProjectManagement } from "../../../../hooks/useProjectManagement";
 
@@ -80,11 +80,15 @@ const ProjectsManagement = ({
   // Only show if user has permission to edit projects
   if (!canManageProjects && !isSuperAdmin && !isAdmin) {
     return (
-      <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200 text-yellow-800 flex items-center gap-3">
-        <Lock className="w-5 h-5" />
-        <div>
-          <h3 className="font-bold">Access Denied</h3>
-          <p className="text-sm">You don't have permission to manage projects.</p>
+      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl border border-yellow-200 shadow-md text-yellow-800">
+        <div className="flex items-center gap-3">
+          <div className="bg-yellow-200 p-3 rounded-lg">
+            <Lock className="w-6 h-6 text-yellow-700" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">Access Denied</h3>
+            <p className="text-sm text-yellow-700">You don't have permission to manage projects.</p>
+          </div>
         </div>
       </div>
     );
@@ -108,31 +112,67 @@ const ProjectsManagement = ({
 
   // Wrapper function to load dropdowns before opening edit modal
   const handleOpenEditModal = async (project) => {
+    console.log('[ProjectsManagement] ========== OPENING EDIT MODAL ==========');
+    console.log('[ProjectsManagement] Opening edit for project:', project);
+    console.log('[ProjectsManagement] Current dropdowns before loading:', dropdowns);
+    
     await loadDropdowns();
+    
+    console.log('[ProjectsManagement] Dropdowns after loading:', dropdowns);
+    console.log('[ProjectsManagement] Dropdowns.projectManagers:', dropdowns.projectManagers);
+    console.log('[ProjectsManagement] Dropdowns.assistantManagers:', dropdowns.assistantManagers);
+    console.log('[ProjectsManagement] Dropdowns.qas:', dropdowns.qas);
+    console.log('[ProjectsManagement] Dropdowns.agents:', dropdowns.agents);
+    
     let fullProject = project;
+    
+    console.log('[ProjectsManagement] Opening edit for project:', project);
+    
     try {
       const res = await fetchProjectsList(user?.user_id);
+      console.log('[ProjectsManagement] Fetched projects list:', res);
+      
       if (res && Array.isArray(res.data)) {
         // Find the project by project_id (API uses project_id, not id)
         const found = res.data.find(p => String(p.project_id) === String(project.project_id || project.id));
+        console.log('[ProjectsManagement] Found project from API:', found);
         if (found) fullProject = found;
       }
     } catch (e) {
+      console.error('[ProjectsManagement] Failed to fetch project:', e);
       // fallback to passed project if fetch fails
     }
+    
+    console.log('[ProjectsManagement] Full project before mapping:', fullProject);
+    
     // Map API response arrays to expected fields for EditProjectModal
-    // Use qa_user_ids for QA Manager(s) as per API response
+    // API response structure: project_qa_id, asst_project_manager_id, project_team_id
     let qaManagerIds = [];
-    if (Array.isArray(fullProject.qa_user_ids) && fullProject.qa_user_ids.length > 0) {
-      qaManagerIds = fullProject.qa_user_ids;
+    if (Array.isArray(fullProject.project_qa_id) && fullProject.project_qa_id.length > 0) {
+      qaManagerIds = fullProject.project_qa_id;
     }
+
+    let assistantManagerIds = [];
+    if (Array.isArray(fullProject.asst_project_manager_id) && fullProject.asst_project_manager_id.length > 0) {
+      assistantManagerIds = fullProject.asst_project_manager_id;
+    }
+
+    let teamIds = [];
+    if (Array.isArray(fullProject.project_team_id) && fullProject.project_team_id.length > 0) {
+      teamIds = fullProject.project_team_id;
+    }
+    
+    console.log('[ProjectsManagement] Extracted IDs:');
+    console.log('  - assistantManagerIds:', assistantManagerIds);
+    console.log('  - qaManagerIds:', qaManagerIds);
+    console.log('  - teamIds:', teamIds);
 
     fullProject = {
       ...fullProject,
       // Map all possible selected fields for EditProjectModal
-      assistantManagerIds: fullProject.assistantManagerIds || fullProject.asst_project_manager_ids || fullProject.asst_project_managers || [],
-      qaManagerIds,
-      teamIds: fullProject.teamIds || fullProject.project_team_ids || fullProject.project_team || [],
+      assistantManagerIds: assistantManagerIds || fullProject.assistantManagerIds || fullProject.asst_project_managers || [],
+      qaManagerIds: qaManagerIds || fullProject.qaManagerIds || fullProject.qa_users || [],
+      teamIds: teamIds || fullProject.teamIds || fullProject.project_team || [],
       asst_project_managers: fullProject.asst_project_managers || [],
       qa_users: fullProject.qa_users || [],
       project_team: fullProject.project_team || [],
@@ -141,7 +181,8 @@ const ProjectsManagement = ({
       teams: normalizeDropdown(dropdowns.agents, 'team'),
       projectManagers: normalizeDropdown(dropdowns.projectManagers)
     };
-    console.log('ProjectsManagement: project with mapped arrays', fullProject);
+    
+    console.log('[ProjectsManagement] Final project with mapped arrays:', fullProject);
     openEditModal(fullProject);
   };
 
@@ -150,6 +191,17 @@ const ProjectsManagement = ({
   const normalizedAssistantManagers = normalizeDropdown(dropdowns.assistantManagers);
   const normalizedQaManagers = normalizeDropdown(dropdowns.qas);
   const normalizedTeams = normalizeDropdown(dropdowns.agents, 'team');
+  
+  console.log('[ProjectsManagement] ===== NORMALIZED DROPDOWNS =====');
+  console.log('[ProjectsManagement] Raw dropdowns.projectManagers:', dropdowns.projectManagers);
+  console.log('[ProjectsManagement] Raw dropdowns.assistantManagers:', dropdowns.assistantManagers);
+  console.log('[ProjectsManagement] Raw dropdowns.qas:', dropdowns.qas);
+  console.log('[ProjectsManagement] Raw dropdowns.agents:', dropdowns.agents);
+  console.log('[ProjectsManagement] Normalized:');
+  console.log('  - projectManagers:', normalizedProjectManagers);
+  console.log('  - assistantManagers:', normalizedAssistantManagers);
+  console.log('  - qaManagers:', normalizedQaManagers);
+  console.log('  - teams:', normalizedTeams);
 
   // Expanded state for each project card
   const [expandedCards, setExpandedCards] = React.useState({});
@@ -168,31 +220,74 @@ const ProjectsManagement = ({
   }, [projects, projectNameSearch]);
 
   return (
-    <div className="space-y-8 animate-fade-in p-4 md:p-0 w-full overflow-x-hidden">
-      {/* Project Name search filter is now inside AddProjectForm */}
+    <div className="space-y-6 animate-fade-in p-4 md:p-0 w-full overflow-x-hidden">
+      {/* Modern Header with Gradient */}
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-3 rounded-lg backdrop-blur-sm">
+              <FolderKanban className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">Project Management</h2>
+              <p className="text-blue-100 text-sm">Manage projects, tasks, and teams</p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
+            <Briefcase className="w-5 h-5" />
+            <span className="font-semibold">{filteredProjects.length} Projects</span>
+          </div>
+        </div>
+      </div>
 
+      {/* Modern Filter Bar with Add Project */}
       {!readOnly && !isEditMode && (
-        <AddProjectForm
-          newProject={newProject}
-          onFieldChange={updateNewProjectField}
-          onSubmit={handleAddProject}
-          // ⬇️ normalized dropdown data
-          projectManagers={normalizedProjectManagers}
-          assistantManagers={normalizedAssistantManagers}
-          qaManagers={normalizedQaManagers}
-          teams={normalizedTeams}
-          loadDropdowns={loadDropdowns}
-          dropdownLoading={dropdownLoading}
-          isSubmitting={isSubmitting}
-          formErrors={formErrors}
-          clearFieldError={clearFieldError}
-          projectFiles={projectFiles}
-          handleProjectFilesChange={handleProjectFilesChange}
-          handleRemoveProjectFile={handleRemoveProjectFile}
-          handleModalClose={handleModalClose}
-          projectNameSearch={projectNameSearch}
-          setProjectNameSearch={setProjectNameSearch}
-        />
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2 rounded-lg">
+              <Filter className="w-5 h-5 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800">Search & Add Projects</h3>
+          </div>
+          
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Search className="w-4 h-4 inline mr-1" />
+                Project Name
+              </label>
+              <input
+                type="text"
+                placeholder="Search by project name"
+                value={projectNameSearch || ""}
+                onChange={e => setProjectNameSearch(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+              />
+            </div>
+            <div className="flex items-end">
+              <AddProjectForm
+                newProject={newProject}
+                onFieldChange={updateNewProjectField}
+                onSubmit={handleAddProject}
+                projectManagers={normalizedProjectManagers}
+                assistantManagers={normalizedAssistantManagers}
+                qaManagers={normalizedQaManagers}
+                teams={normalizedTeams}
+                loadDropdowns={loadDropdowns}
+                dropdownLoading={dropdownLoading}
+                isSubmitting={isSubmitting}
+                formErrors={formErrors}
+                clearFieldError={clearFieldError}
+                projectFiles={projectFiles}
+                handleProjectFilesChange={handleProjectFilesChange}
+                handleRemoveProjectFile={handleRemoveProjectFile}
+                handleModalClose={handleModalClose}
+                projectNameSearch={projectNameSearch}
+                setProjectNameSearch={setProjectNameSearch}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {showEditModal && isEditMode && (
@@ -208,20 +303,32 @@ const ProjectsManagement = ({
           isSubmitting={isSubmitting}
           handleProjectFilesChange={handleProjectFilesChange}
           handleRemoveProjectFile={handleRemoveProjectFile}
+          projectFiles={projectFiles}
+          onFieldChange={updateNewProjectField}
+          clearFieldError={clearFieldError}
         />
       )}
 
+      {/* Projects Content Area */}
       {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-12">
+          <div className="flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
+            <p className="text-slate-600 font-medium">Loading projects...</p>
+          </div>
         </div>
       ) : filteredProjects.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-lg font-semibold">No projects found</p>
-          <p className="text-sm">Create your first project using the form above</p>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-12">
+          <div className="text-center">
+            <div className="bg-slate-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FolderKanban className="w-10 h-10 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-700 mb-2">No projects found</h3>
+            <p className="text-slate-500">Create your first project using the form above</p>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6">
+        <div className="space-y-4">
           {filteredProjects.map(proj => (
             <ProjectCard
               key={proj.id}

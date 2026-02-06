@@ -7,7 +7,7 @@ import React, { useEffect, useState } from "react";
 // Set your backend base URL here or use an environment variable (Vite uses import.meta.env)
 const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
 import { format } from "date-fns";
-import { Users, FileCheck, Download, FileText, TrendingUp, Activity } from "lucide-react";
+import { Users, FileCheck, Download, FileText, TrendingUp, Activity, Clock, CheckCircle2, ExternalLink } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -21,23 +21,56 @@ import BillableReport from "../common/BillableReport";
 import QAFilterBar from "./QAFilterBar";
 
 const QAAgentDashboard = ({ embedded = false }) => {
-      // StatCard component for dashboard stats
-      const StatCard = ({ title, value, subtitle, icon, iconBgColor, iconColor }) => (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between mb-3">
-            <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${iconBgColor}`}>
-              {React.createElement(icon, { className: `w-6 h-6 ${iconColor}` })}
-            </div>
-            <span className="text-xs font-semibold text-slate-400">{subtitle}</span>
+  // StatCard component for dashboard stats
+  const StatCard = ({ title, value, subtext, icon: Icon, trend = 'neutral', alert, className = '' }) => (
+    <div
+      className={`relative overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-all duration-300 min-w-0 group/card transform hover:-translate-y-1 ${className} 
+        ${alert ? 'bg-white border-2 border-red-300' : 'bg-white border-2 border-slate-200 hover:border-blue-300'}`}
+    >
+      {/* Subtle decorative element */}
+      <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full -translate-y-12 translate-x-12"></div>
+      
+      <div className="relative p-5 flex items-center justify-between gap-4">
+        {/* Content Container */}
+        <div className="flex-1 min-w-0 z-10">
+          {/* Title */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <p className={`text-xs font-bold uppercase tracking-wide truncate ${alert ? 'text-red-600' : 'text-slate-600'}`}>
+              {title}
+            </p>
           </div>
-          <div className="font-bold text-2xl text-blue-700 mb-1">{value}</div>
-          <div className="text-sm text-slate-600 font-medium">{title}</div>
+
+          {/* Value */}
+          <h3 className={`text-2xl sm:text-3xl font-extrabold truncate ${alert ? 'text-red-700' : 'text-slate-900'}`}>
+            {value}
+          </h3>
+
+          {/* Subtext */}
+          {subtext && (
+            <p className={`text-xs font-semibold mt-1.5 truncate 
+              ${trend === 'up' ? 'text-green-600' :
+                trend === 'down' ? 'text-red-500' :
+                'text-slate-500'}`}>
+              {subtext}
+            </p>
+          )}
         </div>
-      );
-    // Handle QC Form action
-    const handleQCForm = (tracker) => {
-      log('[QAAgentDashboard] Opening QC Form for tracker:', tracker.tracker_id);
-      // TODO: Implement QC Form modal or navigation
+
+        {/* Icon Container */}
+        <div className={`p-3 rounded-xl shadow-sm flex-shrink-0 z-10 
+          ${alert ? 'bg-red-100' :
+            trend === 'up' ? 'bg-green-100' :
+            'bg-blue-100'}`}>
+          <Icon className={`w-6 h-6 ${alert ? 'text-red-600' : trend === 'up' ? 'text-green-600' : 'text-blue-600'}`} />
+        </div>
+      </div>
+    </div>
+  );
+  
+  // Handle QC Form action
+  const handleQCForm = (tracker) => {
+    log('[QAAgentDashboard] Opening QC Form for tracker:', tracker.tracker_id);
+    // TODO: Implement QC Form modal or navigation
       toast.success("QC Form functionality coming soon!");
     };
   const { user } = useAuth();
@@ -54,11 +87,11 @@ const QAAgentDashboard = ({ embedded = false }) => {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  // By default, show empty date range in filter, but show today's data if no filter is applied
+  // Set default date range to today's date
   const todayStr = new Date().toISOString().slice(0, 10);
   const [dateRange, setDateRange] = useState({
-    start: '',
-    end: ''
+    start: todayStr,
+    end: todayStr
   });
 
   // Helper to get full file URL for download
@@ -68,6 +101,44 @@ const QAAgentDashboard = ({ embedded = false }) => {
     if (/^https?:\/\//i.test(filePath)) return filePath;
     // Otherwise, prepend backend base URL
     return BACKEND_BASE_URL + filePath;
+  };
+
+  // Format date/time to display format: 3/Feb/2026 and 1:05 PM (UTC)
+  const formatDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return { date: '-', time: '-' };
+    
+    try {
+      // Parse the date string - handle various formats
+      let dateObj = new Date(dateTimeStr);
+      
+      // If invalid date, try to extract date portion
+      if (isNaN(dateObj.getTime())) {
+        const dateMatch = dateTimeStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (dateMatch) {
+          dateObj = new Date(dateMatch[0]);
+        } else {
+          return { date: dateTimeStr, time: '' };
+        }
+      }
+      
+      // Format in UTC timezone
+      const day = dateObj.getUTCDate();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames[dateObj.getUTCMonth()];
+      const year = dateObj.getUTCFullYear();
+      const date = `${day}/${month}/${year}`;
+      
+      let hours = dateObj.getUTCHours();
+      const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      const time = `${hours}:${minutes} ${ampm}`;
+      
+      return { date, time };
+    } catch (error) {
+      console.error('[QAAgentDashboard] Error formatting date:', dateTimeStr, error);
+      return { date: dateTimeStr, time: '' };
+    }
   };
 
   // Fetch dashboard data on mount
@@ -195,22 +266,14 @@ const QAAgentDashboard = ({ embedded = false }) => {
     }
   };
 
-  // On mount, show today's data by default
-  useEffect(() => {
-    if (user?.user_id) {
-      fetchDashboardData({ start: todayStr, end: todayStr });
-    }
-    // eslint-disable-next-line
-  }, [user, device_id, device_type]);
+  // On mount, data will load automatically via the dateRange useEffect
+  // No need for separate mount effect since dateRange is initialized with today's date
 
   // Auto-apply filter on date change
   useEffect(() => {
-    // Only fetch if both start and end are set (user applied filter)
+    // Fetch data whenever date range changes (including initial load with today's date)
     if (dateRange.start && dateRange.end) {
       fetchDashboardData(dateRange);
-    } else if (!dateRange.start && !dateRange.end) {
-      // If both are cleared, show today's data
-      fetchDashboardData({ start: todayStr, end: todayStr });
     }
     // eslint-disable-next-line
   }, [dateRange.start, dateRange.end]);
@@ -220,7 +283,9 @@ const QAAgentDashboard = ({ embedded = false }) => {
   };
 
   const handleClear = () => {
-    setDateRange({ start: '', end: '' });
+    // Reset to today's date
+    const today = new Date().toISOString().slice(0, 10);
+    setDateRange({ start: today, end: today });
   };
 
   // Debug: log pendingFiles to help diagnose production issues
@@ -234,157 +299,192 @@ const QAAgentDashboard = ({ embedded = false }) => {
   }, [pendingFiles]);
 
   const content = (
-    <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      {/* Filter Bar for Organization Analytics (before navigation tabs) */}
-      <QAFilterBar
-        dateRange={dateRange}
-        handleDateRangeChange={handleDateRangeChange}
-        handleClear={handleClear}
-      />
-      {/* Navigation Tabs after filter */}
+    <div className="space-y-4 max-w-6xl mx-auto pb-10">
+      {/* Tabs Navigation */}
       <QATabsNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
-      {/* Stats Cards */}
+      
+      {/* Overview Tab Content */}
       {activeTab === 'overview' && (
         error ? (
           <ErrorMessage message={error} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={Users}
-              title="Total Agents"
-              value={stats.totalAgents}
-              subtitle="Assigned agents"
-              iconBgColor="bg-blue-50"
-              iconColor="text-blue-600"
+          <>
+            {/* Filter Bar - Only in Overview Tab */}
+            <QAFilterBar
+              dateRange={dateRange}
+              handleDateRangeChange={handleDateRangeChange}
+              handleClear={handleClear}
             />
-            <StatCard
-              icon={FileCheck}
-              title="Pending QC Files"
-              value={stats.pendingQCFiles}
-              subtitle="Files to review"
-              iconBgColor="bg-blue-50"
-              iconColor="text-blue-600"
-            />
-            <StatCard
-              icon={TrendingUp}
-              title="Placeholder 1"
-              value={stats.placeholder1}
-              subtitle="Data pending"
-              iconBgColor="bg-blue-50"
-              iconColor="text-blue-600"
-            />
-            <StatCard
-              icon={Activity}
-              title="Placeholder 2"
-              value={stats.placeholder2}
-              subtitle="Data pending"
-              iconBgColor="bg-blue-50"
-              iconColor="text-blue-600"
-            />
-          </div>
-        )
-      )}
-      {activeTab === 'billable_report' && <BillableReport />}
-      {/* Latest Pending QC Files */}
-      {activeTab === 'overview' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          {/* Blue Header Section */}
-          <div className="bg-blue-600 px-6 py-4">
-            <div className="flex items-center gap-3 text-white">
-              <FileText className="w-6 h-6" />
-              <div>
-                <h2 className="text-xl font-bold">Latest Pending QC Files</h2>
-                <p className="text-sm text-blue-100 mt-0.5">Files awaiting quality check review</p>
-              </div>
+            
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-[120px]">
+              <StatCard
+                icon={Users}
+                title="Total Agents"
+                value={stats.totalAgents}
+                subtext="Assigned agents"
+                trend="neutral"
+                className="h-32 flex flex-col justify-center"
+              />
+              <StatCard
+                icon={FileCheck}
+                title="Pending QC Files"
+                value={stats.pendingQCFiles}
+                subtext="Files to review"
+                trend="neutral"
+                className="h-32 flex flex-col justify-center"
+              />
+              {/* <StatCard
+                icon={TrendingUp}
+                title="Placeholder 1"
+                value={stats.placeholder1}
+                subtext="Data pending"
+                trend="neutral"
+                className="h-32 flex flex-col justify-center"
+              /> */}
+              {/* <StatCard
+                icon={Activity}
+                title="Placeholder 2"
+                value={stats.placeholder2}
+                subtext="Data pending"
+                trend="neutral"
+                className="h-32 flex flex-col justify-center"
+              /> */}
             </div>
-          </div>
 
-          {/* Table Content */}
-          {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="flex flex-col items-center gap-2">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="text-gray-500">Loading pending files...</span>
-              </div>
-            </div>
-          ) : pendingFiles.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileCheck className="w-8 h-8 text-blue-300" />
-              </div>
-              <p className="text-slate-600 font-medium text-lg mb-1">No pending QC files</p>
-              <p className="text-slate-400 text-sm">All files have been reviewed</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {pendingFiles.slice(0, 5).map((file, index) => (
-                <div
-                  key={file.tracker_id || index}
-                  className="px-6 py-4 hover:bg-blue-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                        <FileText className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 flex-1">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">Date/Time</p>
-                          <p className="text-sm font-medium text-slate-700">
-                            {file.date_time ? file.date_time : "-"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">Agent</p>
-                          <p className="text-sm font-semibold text-slate-800">
-                            {file.user_name || "-"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">Project</p>
-                          <p className="text-sm text-slate-700">
-                            {file.project_name || "-"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">Task</p>
-                          <p className="text-sm text-slate-700">
-                            {file.task_name || "-"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">File</p>
-                          {file.tracker_file ? (
-                            <a
-                              href={getFileUrl(file.tracker_file)}
-                              download
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
-                            >
-                              <Download className="w-4 h-4" />
-                              Download
-                            </a>
-                          ) : (
-                            <span className="text-slate-400 text-sm">—</span>
-                          )}
-                        </div>
-                      </div>
+            {/* Pending QC Files Section */}
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-slate-200 overflow-hidden">
+              {/* Header with gradient background */}
+              <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 px-8 py-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+                      <FileCheck className="w-7 h-7 text-white" />
                     </div>
-                    <button
-                      onClick={() => handleQCForm(file)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shrink-0"
-                    >
-                      <FileText className="w-4 h-4" />
-                      QC Form
-                    </button>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white tracking-tight">Latest Pending QC Files</h2>
+                      <p className="text-sm text-blue-100 mt-1 font-medium">Review and process quality check files</p>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg">
+                    <Clock className="w-4 h-4 text-white" />
+                    <span className="text-sm font-semibold text-white">{pendingFiles.length} Pending</span>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Content Area */}
+              {loading ? (
+                <div className="flex justify-center items-center py-16">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="relative">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200"></div>
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent absolute top-0"></div>
+                    </div>
+                    <span className="text-slate-600 font-semibold">Loading pending files...</span>
+                  </div>
+                </div>
+              ) : pendingFiles.length === 0 ? (
+                <div className="p-16 text-center">
+                  <div className="w-20 h-20 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+                    <CheckCircle2 className="w-10 h-10 text-green-600" />
+                  </div>
+                  <p className="text-slate-800 font-bold text-xl mb-2">All Caught Up!</p>
+                  <p className="text-slate-500 text-sm">No pending QC files at the moment. Great work!</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {pendingFiles.slice(0, 5).map((file, index) => (
+                    <div
+                      key={file.tracker_id || index}
+                      className="group px-6 py-5 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200"
+                    >
+                      <div className="flex items-center gap-5">
+                        {/* File Icon */}
+                        <div className="relative">
+                          <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+                            <FileText className="w-7 h-7 text-blue-600" />
+                          </div>
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center shadow-sm">
+                            <span className="text-white text-xs font-bold">{index + 1}</span>
+                          </div>
+                        </div>
+
+                        {/* File Details Grid */}
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
+                          <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Date/Time
+                            </p>
+                            <div className="flex flex-col">
+                              <p className="text-sm font-bold text-slate-800">
+                                {formatDateTime(file.date_time).date}
+                              </p>
+                              <p className="text-xs font-medium text-slate-600">
+                                {formatDateTime(file.date_time).time}
+                              </p>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Agent</p>
+                            <p className="text-sm font-bold text-blue-700">
+                              {file.user_name || "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Project</p>
+                            <p className="text-sm font-medium text-slate-700 truncate">
+                              {file.project_name || "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Task</p>
+                            <p className="text-sm font-medium text-slate-700 truncate">
+                              {file.task_name || "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">File</p>
+                            {file.tracker_file ? (
+                              <a
+                                href={getFileUrl(file.tracker_file)}
+                                download
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm font-bold transition-colors group/link"
+                              >
+                                <Download className="w-4 h-4 group-hover/link:animate-bounce" />
+                                Download
+                                <ExternalLink className="w-3 h-3 opacity-50" />
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 text-sm font-medium">No file</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* QC Form Button */}
+                        <button
+                          onClick={() => handleQCForm(file)}
+                          className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:shadow-lg flex items-center gap-2 shrink-0 group/btn"
+                        >
+                          <FileCheck className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+                          QC Form
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )
       )}
+      
+      {activeTab === 'billable_report' && <BillableReport />}
     </div>
   );
 

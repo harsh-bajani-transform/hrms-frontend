@@ -38,11 +38,17 @@ api.interceptors.response.use(
     logError('[API Response Error]', error.response?.status, error.message);
 
     // Handle 401 unauthorized - token expired or invalid
-    if (error.response?.status === 401) {
+    // BUT: Don't redirect if we're on the login page or calling the auth endpoint
+    const isAuthEndpoint = error.config?.url?.includes('/auth/');
+    const isLoginPage = window.location.pathname === '/login' || window.location.pathname === '/';
+    
+    if (error.response?.status === 401 && !isAuthEndpoint && !isLoginPage) {
+      console.log('[API] 401 detected, redirecting to login');
       localStorage.removeItem(config.tokenKey);
       localStorage.removeItem(config.userKey);
       sessionStorage.clear();
       window.location.href = '/login';
+      return Promise.reject(error);
     }
 
     // Handle 403 forbidden - insufficient permissions

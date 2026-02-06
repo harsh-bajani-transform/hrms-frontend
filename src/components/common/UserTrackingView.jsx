@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Search } from 'lucide-react';
+import { Users, Search, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -13,6 +13,7 @@ const UserTrackingView = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [roleOptions, setRoleOptions] = useState([]);
   const [updatingPermission, setUpdatingPermission] = useState(null);
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
   // Fetch users and roles on mount
   useEffect(() => {
@@ -91,7 +92,7 @@ const UserTrackingView = () => {
     try {
       setLoading(true);
       // Log user_id and token for debugging
-      const token = localStorage.getItem('tfs_auth_token');
+      const token = sessionStorage.getItem('tfs_auth_token');
       console.log('Sending user_id:', user?.user_id, 'Token:', token);
 
       if (!user?.user_id) {
@@ -207,149 +208,226 @@ const UserTrackingView = () => {
     }
   };
 
+  // Custom Dropdown Component
+  const CustomDropdown = ({ options, value, onChange, placeholder, show, onClose }) => {
+    if (!show) return null;
+
+    return (
+      <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 max-h-60 overflow-y-auto">
+        <div
+          className="px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer transition-colors"
+          onClick={() => {
+            onChange('all');
+            onClose();
+          }}
+        >
+          {placeholder}
+        </div>
+        {options.map((option) => (
+          <div
+            key={option.role_id}
+            className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
+              String(value) === String(option.role_id)
+                ? 'bg-blue-100 text-blue-900 font-semibold'
+                : 'text-slate-700 hover:bg-blue-50'
+            }`}
+            onClick={() => {
+              onChange(option.role_id);
+              onClose();
+            }}
+          >
+            {option.label}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-blue-700 tracking-tight">User Permission</h2>
-      </div>
-
-
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by name or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 py-6 px-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-slate-200">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight cursor-default">User Permissions</h2>
+              <p className="text-slate-600 text-sm font-medium mt-1 cursor-default">Manage user access and permissions</p>
             </div>
           </div>
-
-          {/* Role Filter */}
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Roles</option>
-            {roleOptions.map(opt => (
-              <option key={opt.role_id} value={opt.role_id}>{opt.label}</option>
-            ))}
-          </select>
         </div>
-      </div>
 
-      {/* Users Table */}
-      {filteredUsers.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md text-center py-12">
-          <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No users found</h3>
-          <p className="text-gray-500">Try adjusting your search or filters</p>
+        {/* Filters Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-5 mb-6 border border-slate-200">
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Role Filter Dropdown */}
+            <div className="relative">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                  className="w-full sm:w-48 px-3 py-2.5 pr-10 text-sm text-left border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all hover:border-blue-400"
+                >
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-blue-600" />
+                    <span className={roleFilter === 'all' ? 'text-slate-500' : 'text-slate-700 font-medium'}>
+                      {roleFilter === 'all' 
+                        ? 'All Roles' 
+                        : roleOptions.find(opt => String(opt.role_id) === String(roleFilter))?.label || 'All Roles'
+                      }
+                    </span>
+                  </div>
+                </button>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-blue-600 transition-transform ${showRoleDropdown ? 'rotate-180' : ''}`}>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+                <CustomDropdown
+                  options={roleOptions}
+                  value={roleFilter}
+                  onChange={setRoleFilter}
+                  placeholder="All Roles"
+                  show={showRoleDropdown}
+                  onClose={() => setShowRoleDropdown(false)}
+                />
+              </div>
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-blue-600 to-blue-700">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                    #
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                    User Name
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
-                    User Creation Permission
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
-                    Project Creation Permission
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredUsers.map((userData, index) => (
-                  <tr key={userData.user_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                      {index + 1}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{userData.user_name}</div>
-                      {userData.designation && (
-                        <div className="text-sm text-gray-500">{userData.designation}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {userData.user_email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        userData.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                        userData.role === 'Manager' ? 'bg-blue-100 text-blue-700' :
-                        'bg-green-100 text-green-700'
-                      }`}>
-                        {userData.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handlePermissionToggle(userData.user_id, 'user', userData.user_creation_permission)}
-                        disabled={updatingPermission === `${userData.user_id}-user`}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                          userData.user_creation_permission === 1 ? 'bg-green-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                            userData.user_creation_permission === 1 ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handlePermissionToggle(userData.user_id, 'project', userData.project_creation_permission)}
-                        disabled={updatingPermission === `${userData.user_id}-project`}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                          userData.project_creation_permission === 1 ? 'bg-green-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                            userData.project_creation_permission === 1 ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </td>
+
+        {/* Users Table */}
+        {filteredUsers.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-lg text-center py-16 border border-slate-200">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Users className="w-8 h-8 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-700 mb-2">No users found</h3>
+            <p className="text-slate-500 text-sm">Try adjusting your search or filters</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gradient-to-r from-blue-600 to-blue-700 sticky top-0">
+                  <tr>
+                    <th className="px-5 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      #
+                    </th>
+                    <th className="px-5 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      User Name
+                    </th>
+                    <th className="px-5 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-5 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      Role
+                    </th>
+                    <th className="px-5 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      User Creation
+                    </th>
+                    <th className="px-5 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      Project Creation
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredUsers.map((userData, index) => (
+                    <tr key={userData.user_id} className={`hover:bg-slate-50 transition-colors group ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                      <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-900 font-bold">
+                        {index + 1}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-slate-800">{userData.user_name}</div>
+                        {userData.designation && (
+                          <div className="text-xs text-slate-500 font-medium mt-0.5">{userData.designation}</div>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">
+                        {userData.user_email}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold shadow-sm ${
+                          userData.role === 'Admin' ? 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border border-purple-200' :
+                          userData.role === 'Manager' ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200' :
+                          'bg-gradient-to-r from-green-50 to-green-100 text-green-700 border border-green-200'
+                        }`}>
+                          {userData.role}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => handlePermissionToggle(userData.user_id, 'user', userData.user_creation_permission)}
+                          disabled={updatingPermission === `${userData.user_id}-user`}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm ${
+                            userData.user_creation_permission === 1 ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-slate-300'
+                          }`}
+                          title={userData.user_creation_permission === 1 ? 'Enabled' : 'Disabled'}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+                              userData.user_creation_permission === 1 ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => handlePermissionToggle(userData.user_id, 'project', userData.project_creation_permission)}
+                          disabled={updatingPermission === `${userData.user_id}-project`}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm ${
+                            userData.project_creation_permission === 1 ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-slate-300'
+                          }`}
+                          title={userData.project_creation_permission === 1 ? 'Enabled' : 'Disabled'}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+                              userData.project_creation_permission === 1 ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Results Count */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              Showing <span className="font-semibold text-gray-900">{filteredUsers.length}</span> of <span className="font-semibold text-gray-900">{users.length}</span> users
-            </p>
+            {/* Results Count Footer */}
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-blue-50 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-600 font-medium">
+                  Showing <span className="font-bold text-blue-700">{filteredUsers.length}</span> of <span className="font-bold text-blue-700">{users.length}</span> users
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-slate-500 font-medium">Live Data</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

@@ -80,6 +80,18 @@ const AddProjectFormModal = ({
           onFieldChange(field, updatedValues);
      };
 
+     // Handle Select All functionality for multi-select dropdowns
+     const handleSelectAll = (field, allItems, isChecked) => {
+          if (isChecked) {
+               // Select all items
+               const allIds = allItems.map(item => item.user_id || item.team_id);
+               onFieldChange(field, allIds);
+          } else {
+               // Deselect all items
+               onFieldChange(field, []);
+          }
+     };
+
      // Check if item is selected
      const isSelected = (field, userId) => {
           const currentValues = newProject[field] || [];
@@ -312,28 +324,38 @@ const AddProjectFormModal = ({
                                         </button>
 
                                         {dropdownOpen.assistantManagers && (
-                                             <div ref={dropdownRefs.assistantManagers} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                                                                                                             {/* Show each user only once, checked if selected */}
-                                                                                                                             {[
-                                                                                                                                  ...newProject.assistantManagerIds
-                                                                                                                                       .map((id, idx) => processedAssistantManagers.find(am => String(am.user_id) === String(id)) || { user_id: id, label: `Unknown (${id})`, _idx: idx }),
-                                                                                                                                  ...processedAssistantManagers.filter(am => !newProject.assistantManagerIds.includes(am.user_id))
-                                                                                                                             ].map((am, idx) => (
-                                                                                                                                  <label
-                                                                                                                                       key={am.user_id + '-' + (am._idx !== undefined ? am._idx : idx)}
-                                                                                                                                       className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                                                                                  >
-                                                                                                                                       <input
-                                                                                                                                            type="checkbox"
-                                                                                                                                            checked={isSelected('assistantManagerIds', am.user_id)}
-                                                                                                                                            onChange={(e) => handleMultipleSelect('assistantManagerIds', am.user_id, e.target.checked)}
-                                                                                                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                                                                                                       />
-                                                                                                                                       <span className="ml-2 text-sm text-gray-700">
-                                                                                                                                            {am.label}
-                                                                                                                                       </span>
-                                                                                                                                  </label>
-                                                                                                                             ))}
+                                             <div ref={dropdownRefs.assistantManagers} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                                  {/* Select All Option */}
+                                                  <label className="flex items-center px-3 py-2 hover:bg-green-50 cursor-pointer border-b border-gray-200 bg-gray-50">
+                                                       <input
+                                                            type="checkbox"
+                                                            checked={processedAssistantManagers.length > 0 && (newProject.assistantManagerIds || []).length === processedAssistantManagers.length}
+                                                            onChange={(e) => handleSelectAll('assistantManagerIds', processedAssistantManagers, e.target.checked)}
+                                                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                                       />
+                                                       <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
+                                                  </label>
+                                                  {/* Show each user only once, checked if selected */}
+                                                  {[
+                                                       ...newProject.assistantManagerIds
+                                                            .map((id, idx) => processedAssistantManagers.find(am => String(am.user_id) === String(id)) || { user_id: id, label: `Unknown (${id})`, _idx: idx }),
+                                                       ...processedAssistantManagers.filter(am => !newProject.assistantManagerIds.includes(am.user_id))
+                                                  ].map((am, idx) => (
+                                                       <label
+                                                            key={am.user_id + '-' + (am._idx !== undefined ? am._idx : idx)}
+                                                            className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                                       >
+                                                            <input
+                                                                 type="checkbox"
+                                                                 checked={isSelected('assistantManagerIds', am.user_id)}
+                                                                 onChange={(e) => handleMultipleSelect('assistantManagerIds', am.user_id, e.target.checked)}
+                                                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                            />
+                                                            <span className="ml-2 text-sm text-gray-700">
+                                                                 {am.label}
+                                                            </span>
+                                                       </label>
+                                                  ))}
                                              </div>
                                         )}
                                         {formErrors.assistantManagerIds && (
@@ -381,28 +403,38 @@ const AddProjectFormModal = ({
                                              <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.qaManagers ? 'transform rotate-180' : ''}`} />
                                         </button>
                                         {dropdownOpen.qaManagers && (
-                                             <div ref={dropdownRefs.qaManagers} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                                                                                                                             {/* Show each user only once, checked if selected */}
-                                                                                                                                 {[
-                                                                                                                                      ...newProject.qaManagerIds
-                                                                                                                                           .map((id, idx) => processedQaManagers.find(qa => String(qa.user_id) === String(id)) || { user_id: id, label: `Unknown (${id})`, _idx: idx }),
-                                                                                                                                      ...processedQaManagers.filter(qa => !newProject.qaManagerIds.includes(qa.user_id))
-                                                                                                                                 ].map((qa, idx) => (
-                                                                                                                                      <label
-                                                                                                                                           key={qa.user_id + '-' + (qa._idx !== undefined ? qa._idx : idx)}
-                                                                                                                                           className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                                                                                      >
-                                                                                                                                       <input
-                                                                                                                                            type="checkbox"
-                                                                                                                                            checked={isSelected('qaManagerIds', qa.user_id)}
-                                                                                                                                            onChange={(e) => handleMultipleSelect('qaManagerIds', qa.user_id, e.target.checked)}
-                                                                                                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                                                                                                       />
-                                                                                                                                       <span className="ml-2 text-sm text-gray-700">
-                                                                                                                                            {qa.label}
-                                                                                                                                       </span>
-                                                                                                                                  </label>
-                                                                                                                             ))}
+                                             <div ref={dropdownRefs.qaManagers} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                                  {/* Select All Option */}
+                                                  <label className="flex items-center px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-gray-200 bg-gray-50">
+                                                       <input
+                                                            type="checkbox"
+                                                            checked={processedQaManagers.length > 0 && (newProject.qaManagerIds || []).length === processedQaManagers.length}
+                                                            onChange={(e) => handleSelectAll('qaManagerIds', processedQaManagers, e.target.checked)}
+                                                            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                                                       />
+                                                       <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
+                                                  </label>
+                                                  {/* Show each user only once, checked if selected */}
+                                                  {[
+                                                       ...newProject.qaManagerIds
+                                                            .map((id, idx) => processedQaManagers.find(qa => String(qa.user_id) === String(id)) || { user_id: id, label: `Unknown (${id})`, _idx: idx }),
+                                                       ...processedQaManagers.filter(qa => !newProject.qaManagerIds.includes(qa.user_id))
+                                                  ].map((qa, idx) => (
+                                                       <label
+                                                            key={qa.user_id + '-' + (qa._idx !== undefined ? qa._idx : idx)}
+                                                            className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                                       >
+                                                            <input
+                                                                 type="checkbox"
+                                                                 checked={isSelected('qaManagerIds', qa.user_id)}
+                                                                 onChange={(e) => handleMultipleSelect('qaManagerIds', qa.user_id, e.target.checked)}
+                                                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                            />
+                                                            <span className="ml-2 text-sm text-gray-700">
+                                                                 {qa.label}
+                                                            </span>
+                                                       </label>
+                                                  ))}
                                              </div>
                                         )}
                                    </div>
@@ -449,7 +481,17 @@ const AddProjectFormModal = ({
                                              <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.teams ? 'transform rotate-180' : ''}`} />
                                         </button>
                                         {dropdownOpen.teams && (
-                                             <div ref={dropdownRefs.teams} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                                             <div ref={dropdownRefs.teams} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                                  {/* Select All Option */}
+                                                  <label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-200 bg-gray-50">
+                                                       <input
+                                                            type="checkbox"
+                                                            checked={processedTeams.length > 0 && (newProject.teamIds || []).length === processedTeams.length}
+                                                            onChange={(e) => handleSelectAll('teamIds', processedTeams, e.target.checked)}
+                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                       />
+                                                       <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
+                                                  </label>
                                                   {processedTeams.map((team) => (
                                                        <label
                                                             key={team.user_id}
@@ -615,10 +657,12 @@ const AddProjectFormModal = ({
 
                                    {projectFiles && projectFiles.length > 0 && (
                                         <div className="mt-1 space-y-1">
-                                             {projectFiles.map((file, index) => (
-                                                  <div
-                                                       key={`${file.name}-${index}`}
-                                                       className="
+                                             {projectFiles.map((file, index) => {
+                                                  const isExistingFile = !(file instanceof File);
+                                                  return (
+                                                       <div
+                                                            key={`${file.name}-${index}`}
+                                                            className="
           flex items-center justify-between
           px-3 py-1
           border border-gray-200
@@ -626,23 +670,28 @@ const AddProjectFormModal = ({
           text-sm
           bg-white
         "
-                                                  >
-                                                       <span className="truncate text-red-600 text-xs max-w-[85%]">
-                                                            {file.name}
-                                                       </span>
-                                                       <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                 e.stopPropagation();
-                                                                 handleRemoveProjectFile(index);
-                                                            }}
-                                                            className="text-gray-400 hover:text-red-500"
-                                                            title="Remove file"
                                                        >
-                                                            <XCircle className="w-4 h-4" />
-                                                       </button>
-                                                  </div>
-                                             ))}
+                                                            <span className={`truncate text-xs max-w-[85%] ${isExistingFile ? 'text-blue-600' : 'text-red-600'}`}>
+                                                                 {file.name}
+                                                            </span>
+                                                            {isExistingFile ? (
+                                                                 <span className="text-green-600 text-xs font-medium">Existing</span>
+                                                            ) : (
+                                                                 <button
+                                                                      type="button"
+                                                                      onClick={(e) => {
+                                                                           e.stopPropagation();
+                                                                           handleRemoveProjectFile(index);
+                                                                      }}
+                                                                      className="text-gray-400 hover:text-red-500"
+                                                                      title="Remove file"
+                                                                 >
+                                                                      <XCircle className="w-4 h-4" />
+                                                                 </button>
+                                                            )}
+                                                       </div>
+                                                  );
+                                             })}
                                         </div>
                                    )}
                               </div>

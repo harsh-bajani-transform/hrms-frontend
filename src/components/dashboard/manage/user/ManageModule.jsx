@@ -44,6 +44,7 @@ const ManageModule = ({ activeTab }) => {
 
                          return {
                               id: u.user_id,
+                              user_id: u.user_id, // Include user_id for API calls
                               name: u.user_name,
                               email: u.user_email,
                               phone: u.user_number,
@@ -64,7 +65,14 @@ const ManageModule = ({ activeTab }) => {
                               tenure: u.user_tenure ?? u.tenure ?? u.user_tenure_years ?? u.total_tenure ?? "",
                               profile_picture: profileRaw || null, // keep raw value for update API
                               profile_picture_url: normalizeProfilePicture(profileRaw),
-                              is_active: u.is_active ?? 1
+                              is_active: u.is_active ?? 1,
+                              // Include manager fields for reporting hierarchy display
+                              asst_manager_names: u.asst_manager_names || u.assistant_manager_names || "",
+                              asst_managers: u.asst_managers || u.assistant_managers || [],
+                              project_manager_names: u.project_manager_names || "",
+                              project_managers: u.project_managers || [],
+                              qa_names: u.qa_names || "",
+                              qas: u.qas || []
                          };
                     });
 

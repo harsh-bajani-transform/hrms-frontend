@@ -42,7 +42,9 @@ export const deleteTask = async (payload) => {
  * @param {Object} payload
  */
 export const createProject = async (payload) => {
-  const res = await api.post("/project/create", payload);
+  // If payload is FormData, set Content-Type to undefined to let browser set boundary
+  const headers = payload instanceof FormData ? { 'Content-Type': undefined } : {};
+  const res = await api.post("/project/create", payload, { headers });
   return res.data;
 };
 
@@ -52,7 +54,10 @@ export const createProject = async (payload) => {
  * @returns {Promise} Project list response
  */
 export const fetchProjectsList = async (logged_in_user_id) => {
+  console.log('[projectService] Fetching projects for user:', logged_in_user_id);
   const res = await api.post("/project/list", { logged_in_user_id });
+  console.log('[projectService] Projects API response:', res);
+  console.log('[projectService] Projects data:', res.data);
   return res.data;
 };
 
@@ -62,10 +67,21 @@ export const fetchProjectsList = async (logged_in_user_id) => {
  * @param {Object} payload
  */
 export const updateProject = async (projectId, payload) => {
-  const res = await api.put("/project/update", {
+  // If payload is FormData, set Content-Type to undefined to let browser set boundary
+  const headers = payload instanceof FormData ? { 'Content-Type': undefined } : {};
+  
+  // For FormData, append project_id instead of spreading
+  if (payload instanceof FormData) {
+    payload.append('project_id', projectId);
+    const res = await api.post("/project/update", payload, { headers });
+    return res.data;
+  }
+  
+  // For regular objects, use the original logic
+  const res = await api.post("/project/update", {
     project_id: projectId,
     ...payload
-  });
+  }, { headers });
   return res.data;
 };
 

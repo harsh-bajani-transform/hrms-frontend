@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Download, Trash2, Filter, FileDown } from "lucide-react";
+import { Download, Trash2, Filter, FileDown, RotateCcw, RefreshCw } from "lucide-react";
 import { toast } from "react-hot-toast";
 import * as XLSX from 'xlsx';
 import api from "../../services/api";
@@ -29,8 +29,16 @@ const TrackerTable = ({ userId, projects, onClose }) => {
   // Filter states
   const [selectedProject, setSelectedProject] = useState("");
   const [selectedTask, setSelectedTask] = useState("");
-  const [startDate, setStartDate] = useState(""); // empty by default
-  const [endDate, setEndDate] = useState(""); // empty by default
+  const [startDate, setStartDate] = useState(getTodayDate()); // Default to today
+  const [endDate, setEndDate] = useState(getTodayDate()); // Default to today
+
+  // Custom calendar picker states
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+
+  // Custom dropdown states
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [showTaskDropdown, setShowTaskDropdown] = useState(false);
 
 
   // Get tasks for selected project
@@ -146,6 +154,209 @@ const TrackerTable = ({ userId, projects, onClose }) => {
     }
   }, [trackers, user]);
 
+  // Convert yyyy-mm-dd to dd/mm/yyyy for display
+  const formatToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  // Convert dd/mm/yyyy to yyyy-mm-dd for storage
+  const formatToStorage = (day, month, year) => {
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
+
+  // Format date and time to display format: Returns object with date and time separate
+  const formatDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return { date: '-', time: '' };
+    
+    try {
+      const date = new Date(dateTimeStr);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) return { date: dateTimeStr, time: '' };
+      
+      // Month names abbreviated
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      // Get date components in UTC
+      const day = date.getUTCDate();
+      const month = monthNames[date.getUTCMonth()];
+      const year = date.getUTCFullYear();
+      
+      // Get time components in UTC
+      let hours = date.getUTCHours();
+      const minutes = date.getUTCMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      
+      // Convert to 12-hour format
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0 should be 12
+      const minutesStr = String(minutes).padStart(2, '0');
+      
+      return {
+        date: `${day}/${month}/${year}`,
+        time: `${hours}:${minutesStr} ${ampm}`
+      };
+    } catch (error) {
+      return { date: dateTimeStr, time: '' };
+    }
+  };
+
+  // Handle date selection from custom calendar
+  const handleDateSelect = (name, dateValue) => {
+    if (name === 'start') {
+      setStartDate(dateValue);
+      setShowStartPicker(false);
+    } else if (name === 'end') {
+      setEndDate(dateValue);
+      setShowEndPicker(false);
+    }
+  };
+
+  // Generate calendar days
+  const generateCalendar = (currentDate) => {
+    const date = currentDate ? new Date(currentDate) : new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    return { year, month, daysInMonth, startingDayOfWeek };
+  };
+
+  const CustomDatePicker = ({ name, value, onSelect, show, onClose }) => {
+    const [viewDate, setViewDate] = useState(value || new Date().toISOString().split('T')[0]);
+    const { year, month, daysInMonth, startingDayOfWeek } = generateCalendar(viewDate);
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+    const handlePrevMonth = () => {
+      const newDate = new Date(year, month - 1, 1);
+      setViewDate(newDate.toISOString().split('T')[0]);
+    };
+
+    const handleNextMonth = () => {
+      const newDate = new Date(year, month + 1, 1);
+      setViewDate(newDate.toISOString().split('T')[0]);
+    };
+
+    if (!show) return null;
+
+    return (
+      <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64">
+        {/* Month/Year Header */}
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <span className="font-bold text-sm text-slate-800">{monthNames[month]} {year}</span>
+          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </button>
+        </div>
+
+        {/* Day Names */}
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {dayNames.map(day => (
+            <div key={day} className="text-center text-xs font-bold text-slate-600">{day}</div>
+          ))}
+        </div>
+
+        {/* Calendar Days */}
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: startingDayOfWeek }).map((_, i) => (
+            <div key={`empty-${i}`} />
+          ))}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const dateStr = formatToStorage(day, month + 1, year);
+            const isSelected = dateStr === value;
+            return (
+              <button
+                key={day}
+                onClick={() => onSelect(name, dateStr)}
+                className={`text-xs p-1.5 rounded hover:bg-blue-100 transition-colors ${
+                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
+                }`}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Close Button */}
+        <button 
+          onClick={onClose}
+          className="w-full mt-3 text-xs text-slate-600 hover:text-slate-800 font-semibold"
+        >
+          Close
+        </button>
+      </div>
+    );
+  };
+
+  // Custom Dropdown Component
+  const CustomDropdown = ({ options, value, onChange, placeholder, show, onClose, disabled }) => {
+    if (!show || disabled) return null;
+
+    const selectedOption = options.find(opt => String(opt.value) === String(value));
+
+    return (
+      <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 max-h-60 overflow-y-auto">
+        {/* All option */}
+        <div
+          onClick={() => {
+            onChange('');
+            onClose();
+          }}
+          className={`px-4 py-2.5 cursor-pointer transition-all border-b border-slate-100 ${
+            !value ? 'bg-blue-50 text-blue-700 font-semibold' : 'hover:bg-blue-50 text-slate-700'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {!value && (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            )}
+            <span className="text-sm">{placeholder}</span>
+          </div>
+        </div>
+        
+        {/* Options */}
+        {options.map((option) => (
+          <div
+            key={option.value}
+            onClick={() => {
+              onChange(option.value);
+              onClose();
+            }}
+            className={`px-4 py-2.5 cursor-pointer transition-all ${
+              String(value) === String(option.value)
+                ? 'bg-blue-50 text-blue-700 font-semibold'
+                : 'hover:bg-blue-50 text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {String(value) === String(option.value) && (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              )}
+              <span className="text-sm">{option.label}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const handleDelete = (tracker_id) => setDeleteConfirm(tracker_id);
   
   const confirmDelete = async () => {
@@ -176,10 +387,62 @@ const TrackerTable = ({ userId, projects, onClose }) => {
 
   // Clear filters
   const handleClearFilters = () => {
+    const today = getTodayDate();
     setSelectedProject("");
     setSelectedTask("");
-    setStartDate("");
-    setEndDate("");
+    setStartDate(today);
+    setEndDate(today);
+  };
+
+  // Refresh/Reload data
+  const handleRefresh = async () => {
+    if (!userId || !user) return;
+
+    try {
+      setLoading(true);
+      setError("");
+
+      let payload = {
+        logged_in_user_id: userId,
+        device_id: user.device_id || '',
+        device_type: user.device_type || '',
+      };
+
+      if (selectedProject) payload.project_id = selectedProject;
+      if (selectedTask) payload.task_id = selectedTask;
+      if (startDate) payload.date_from = startDate;
+      if (endDate) payload.date_to = endDate;
+
+      if (!startDate && !endDate) {
+        const today = getTodayDate();
+        payload.date_from = today;
+        payload.date_to = today;
+      }
+
+      log('[TrackerTable] Refreshing trackers with filters:', payload);
+      const res = await api.post("/tracker/view", payload);
+      if (res.status === 200 && res.data?.data) {
+        const responseData = res.data.data;
+        const fetchedTrackers = responseData.trackers || [];
+        const enrichedTrackers = fetchedTrackers.map(tracker => ({
+          ...tracker,
+          project_name: tracker.project_name || getProjectName(tracker.project_id),
+          task_name: tracker.task_name || getTaskName(tracker.task_id, tracker.project_id),
+        }));
+        setTrackers(enrichedTrackers);
+        toast.success("Data refreshed successfully!");
+      } else {
+        setTrackers([]);
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "Unknown error";
+      const errorMsg = "Failed to refresh data: " + msg;
+      logError('[TrackerTable] Refresh error:', errorMsg);
+      setError(errorMsg);
+      toast.error("Failed to refresh data");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Calculate totals from filtered trackers
@@ -192,6 +455,42 @@ const TrackerTable = ({ userId, projects, onClose }) => {
       acc.billableHours += Number(tracker.billable_hours) || 0;
       return acc;
     }, { tenureTarget: 0, production: 0, billableHours: 0 });
+  }, [trackers]);
+
+  // Calculate monthly summary from filtered trackers
+  const monthlySummary = useMemo(() => {
+    const monthlyData = {};
+    
+    trackers.forEach(tracker => {
+      if (!tracker.date_time) return;
+      
+      // Extract year and month from date_time
+      const dateObj = new Date(tracker.date_time);
+      const year = dateObj.getFullYear();
+      const month = dateObj.getMonth(); // 0-11
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          year,
+          month: month + 1,
+          monthName: dateObj.toLocaleString('default', { month: 'long' }),
+          tenureTarget: 0,
+          production: 0,
+          billableHours: 0
+        };
+      }
+      
+      monthlyData[monthKey].tenureTarget += Number(tracker.tenure_target) || 0;
+      monthlyData[monthKey].production += Number(tracker.production) || 0;
+      monthlyData[monthKey].billableHours += Number(tracker.billable_hours) || 0;
+    });
+    
+    // Convert to array and sort by date
+    return Object.values(monthlyData).sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
+    });
   }, [trackers]);
 
   // Export to Excel function
@@ -260,255 +559,423 @@ const TrackerTable = ({ userId, projects, onClose }) => {
   };
 
   return (
-    <div className="space-y-10 max-w-5xl mx-auto py-8">
-      <div className="mb-8 flex items-center gap-3 justify-between">
-        <h2 className="text-3xl font-extrabold text-blue-800 tracking-tight drop-shadow-sm">All Trackers</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExportToExcel}
-            disabled={loading || trackers.length === 0}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow disabled:bg-gray-400 disabled:cursor-not-allowed transition-all"
-            title="Export filtered data to Excel"
-          >
-            <FileDown className="w-4 h-4" />
-            Export to Excel
-          </button>
-          <button onClick={onClose} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-xs shadow">
-            Back to Form
-          </button>
-        </div>
-      </div>
-
-      {/* Filter Section */}
-      <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 rounded-2xl p-6 mb-6 shadow border border-blue-100">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter className="w-5 h-5 text-blue-700" />
-          <h3 className="text-base font-bold text-blue-700 tracking-wide">Filters</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Start Date */}
-          <div>
-            <label className="block text-xs font-semibold text-blue-900 mb-1">
-              Start Date
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white shadow-sm"
-              placeholder="Start Date"
-            />
-          </div>
-
-          {/* End Date */}
-          <div>
-            <label className="block text-xs font-semibold text-blue-900 mb-1">
-              End Date
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white shadow-sm"
-              placeholder="End Date"
-            />
-          </div>
-
-          {/* Project Dropdown */}
-          <div>
-            <label className="block text-xs font-semibold text-blue-900 mb-1">
-              Project
-            </label>
-            <select
-              value={selectedProject}
-              onChange={(e) => {
-                setSelectedProject(e.target.value);
-                setSelectedTask(""); // Clear task when project changes
-              }}
-              className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white shadow-sm"
-            >
-              <option value="">All Projects</option>
-              {projects.map((project) => (
-                <option key={project.project_id} value={project.project_id}>
-                  {project.project_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Task Dropdown */}
-          <div>
-            <label className="block text-xs font-semibold text-blue-900 mb-1">
-              Task
-            </label>
-            <select
-              value={selectedTask}
-              onChange={(e) => setSelectedTask(e.target.value)}
-              disabled={!selectedProject}
-              className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="">All Tasks</option>
-              {availableTasks.map((task) => (
-                <option key={task.task_id} value={task.task_id}>
-                  {task.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {/* Clear Filters Button */}
-        <div className="mt-2.5 flex justify-end">
-          <button
-            onClick={handleClearFilters}
-            className="px-4 py-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold shadow transition-all"
-          >
-            Clear Filters
-          </button>
-        </div>
-      </div>
-
-      {error && <div className="text-red-600 mb-2 font-semibold">{error}</div>}
-
-      {/* Scrollable table container with max height for 10 rows */}
-      <div className="overflow-x-auto max-h-[600px] overflow-y-auto border border-slate-200 rounded-2xl shadow-lg bg-white">
-        <table className="min-w-full text-sm text-slate-700 table-fixed rounded-xl overflow-hidden">
-          <colgroup><col style={{ width: '16%' }}/><col style={{ width: '16%' }}/><col style={{ width: '16%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '9%' }}/><col style={{ width: '7%' }}/></colgroup>
-          <thead className="bg-gradient-to-r from-blue-100 to-blue-50 sticky top-0 z-10">
-            <tr>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Date/Time</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Project</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Task</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Per Hour Target</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Production</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Billable Hours</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200">Task File</th>
-              <th className="px-5 py-3 font-bold text-blue-800 uppercase tracking-wider border-b border-slate-200 text-center">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={8} className="text-center py-16 font-semibold text-blue-600 animate-pulse">Loading...</td></tr>
-            ) : trackers.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-16 text-slate-400 font-medium">No tracker data found.</td></tr>
-            ) : trackers.map(tracker => (
-              <tr key={tracker.tracker_id} className="border-b border-slate-100 hover:bg-blue-50/60 transition-colors group">
-                <td className="px-5 py-3 align-middle whitespace-nowrap">
-                  {tracker.date_time ? tracker.date_time : "-"}
-                </td>
-                <td className="px-5 py-3 align-middle whitespace-nowrap">{tracker.project_name || getProjectName(tracker.project_id)}</td>
-                <td className="px-5 py-3 align-middle whitespace-nowrap">{tracker.task_name || getTaskName(tracker.task_id, tracker.project_id) || '-'}</td>
-                {/* Always show tenure_target from tracker/view for all roles */}
-                <td className="px-5 py-3 align-middle whitespace-nowrap">{tracker.tenure_target ?? '-'}</td>
-                <td className="px-5 py-3 align-middle whitespace-nowrap">{tracker.production}</td>
-                <td className="px-5 py-3 align-middle whitespace-nowrap">
-                  {tracker.billable_hours !== null && tracker.billable_hours !== undefined
-                    ? Number(tracker.billable_hours).toFixed(2)
-                    : "0.00"}
-                </td>
-                <td className="px-5 py-3 align-middle text-center">
-                  {tracker.tracker_file ? (
-                    <a
-                      href={tracker.tracker_file}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 group-hover:bg-blue-100 rounded-full p-2 shadow-sm"
-                      title="Download file"
-                    >
-                      <Download className="w-5 h-5" />
-                    </a>
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  )}
-                </td>
-                <td className="px-5 py-3 align-middle text-center">
-                  {isToday(tracker.date_time) ? (
-                    <button
-                      onClick={() => handleDelete(tracker.tracker_id)}
-                      disabled={deletingId === tracker.tracker_id}
-                      className="p-0 bg-transparent hover:bg-transparent focus:outline-none"
-                      title="Delete Tracker"
-                      aria-label="Delete Tracker"
-                    >
-                      <Trash2
-                        className="w-6 h-6 text-red-500 bg-red-100 bg-opacity-40 rounded-full p-1 transition-colors duration-200 hover:text-white hover:bg-red-500 hover:bg-opacity-100"
-                      />
-                    </button>
-                  ) : (
-                    <span className="text-slate-300" title="Can only delete today's entries">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Totals Summary Card */}
-      {!loading && trackers.length > 0 && (
-        <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200 shadow-lg">
-          <h3 className="text-lg font-bold text-blue-900 mb-6 flex items-center gap-2">
-            <span className="inline-block w-2 h-2 bg-blue-600 rounded-full"></span>
-            Summary Totals
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Total Per Hour Target */}
-            <div className="bg-white rounded-xl p-6 shadow border border-blue-100 flex flex-col items-center">
-              <p className="text-xs text-gray-600 mb-1 uppercase tracking-wide">Total Per Hour Target</p>
-              <p className="text-3xl font-extrabold text-blue-700">{totals.tenureTarget.toFixed(2)}</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 py-6 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-slate-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                  <path d="M3 3h18v18H3z"/>
+                  <path d="M8 8h8M8 12h8M8 16h5"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800 tracking-tight cursor-default">All Trackers</h2>
+                <p className="text-slate-600 text-sm font-medium mt-1 cursor-default">View and manage production records</p>
+              </div>
             </div>
-
-            {/* Total Production */}
-            <div className="bg-white rounded-xl p-6 shadow border border-green-100 flex flex-col items-center">
-              <p className="text-xs text-gray-600 mb-1 uppercase tracking-wide">Total Production</p>
-              <p className="text-3xl font-extrabold text-green-700">{totals.production.toFixed(2)}</p>
-            </div>
-
-            {/* Total Billable Hours */}
-            <div className="bg-white rounded-xl p-6 shadow border border-purple-100 flex flex-col items-center">
-              <p className="text-xs text-gray-600 mb-1 uppercase tracking-wide">Total Billable Hours</p>
-              <p className="text-3xl font-extrabold text-purple-700">{totals.billableHours.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete confirmation modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full pointer-events-auto">
-            <h3 className="text-lg font-bold mb-4 text-slate-800">Confirm Delete</h3>
-            <p className="mb-6 text-slate-600">Are you sure you want to delete this tracker entry?</p>
-            <div className="flex justify-end gap-4">
+            <div className="flex gap-3">
               <button
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded font-semibold"
-                onClick={() => setDeleteConfirm(null)}
-                disabled={deletingId}
-              >Cancel</button>
-              <button
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded font-semibold"
-                onClick={confirmDelete}
-                disabled={deletingId}
-              >{deletingId ? "Deleting..." : "Delete"}</button>
+                onClick={handleExportToExcel}
+                disabled={loading || trackers.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200"
+                title="Export filtered data to Excel"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button 
+                onClick={onClose} 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg transition-all"
+              >
+                Back to Form
+              </button>
             </div>
           </div>
         </div>
-      )}
-      {/* Loader spinner style for consistency */}
-      <style>{`
-        .loader {
-          border: 4px solid #e0e7ef;
-          border-top: 4px solid #2563eb;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
+
+        {/* Filter Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-3 mb-6 border border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Start Date */}
+            <div className="relative">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                  <path d="M8 2v4"></path>
+                  <path d="M16 2v4"></path>
+                  <rect width="18" height="18" x="3" y="4" rx="2"></rect>
+                  <path d="M3 10h18"></path>
+                </svg>
+                Start Date
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formatToDisplay(startDate)}
+                  readOnly
+                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all"
+                  placeholder="dd/mm/yyyy"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowStartPicker(!showStartPicker)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                    <path d="M8 2v4"></path>
+                    <path d="M16 2v4"></path>
+                    <rect width="18" height="18" x="3" y="4" rx="2"></rect>
+                    <path d="M3 10h18"></path>
+                  </svg>
+                </button>
+                <CustomDatePicker 
+                  name="start"
+                  value={startDate}
+                  onSelect={handleDateSelect}
+                  show={showStartPicker}
+                  onClose={() => setShowStartPicker(false)}
+                />
+              </div>
+            </div>
+
+            {/* End Date */}
+            <div className="relative">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                  <path d="M8 2v4"></path>
+                  <path d="M16 2v4"></path>
+                  <rect width="18" height="18" x="3" y="4" rx="2"></rect>
+                  <path d="M3 10h18"></path>
+                </svg>
+                End Date
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formatToDisplay(endDate)}
+                  readOnly
+                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all"
+                  placeholder="dd/mm/yyyy"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEndPicker(!showEndPicker)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                    <path d="M8 2v4"></path>
+                    <path d="M16 2v4"></path>
+                    <rect width="18" height="18" x="3" y="4" rx="2"></rect>
+                    <path d="M3 10h18"></path>
+                  </svg>
+                </button>
+                <CustomDatePicker 
+                  name="end"
+                  value={endDate}
+                  onSelect={handleDateSelect}
+                  show={showEndPicker}
+                  onClose={() => setShowEndPicker(false)}
+                />
+              </div>
+            </div>
+
+            {/* Project Dropdown */}
+            <div className="relative">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                  <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+                </svg>
+                Project
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all text-left hover:border-blue-400"
+                >
+                  <span className={selectedProject ? 'text-slate-700' : 'text-slate-500'}>
+                    {selectedProject 
+                      ? projects.find(p => String(p.project_id) === String(selectedProject))?.project_name || 'All Projects'
+                      : 'All Projects'
+                    }
+                  </span>
+                </button>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-blue-600 transition-transform ${showProjectDropdown ? 'rotate-180' : ''}`}>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+                <CustomDropdown
+                  options={projects.map(p => ({ value: p.project_id, label: p.project_name }))}
+                  value={selectedProject}
+                  onChange={(val) => {
+                    setSelectedProject(val);
+                    setSelectedTask('');
+                    setShowTaskDropdown(false);
+                  }}
+                  placeholder="All Projects"
+                  show={showProjectDropdown}
+                  onClose={() => setShowProjectDropdown(false)}
+                  disabled={false}
+                />
+              </div>
+            </div>
+
+            {/* Task Dropdown */}
+            <div className="relative">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                  <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                  <rect width="8" height="4" x="8" y="3" rx="1"/>
+                  <path d="M9 12h6"/>
+                  <path d="M9 16h6"/>
+                </svg>
+                Task
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => !selectedProject ? null : setShowTaskDropdown(!showTaskDropdown)}
+                  disabled={!selectedProject}
+                  className={`w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all text-left ${
+                    !selectedProject 
+                      ? 'opacity-60 cursor-not-allowed bg-slate-100' 
+                      : 'hover:border-blue-400'
+                  }`}
+                >
+                  <span className={selectedTask ? 'text-slate-700' : 'text-slate-500'}>
+                    {selectedTask 
+                      ? availableTasks.find(t => String(t.task_id) === String(selectedTask))?.label || 'All Tasks'
+                      : 'All Tasks'
+                    }
+                  </span>
+                </button>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-blue-600 transition-transform ${showTaskDropdown ? 'rotate-180' : ''}`}>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+                <CustomDropdown
+                  options={availableTasks.map(t => ({ value: t.task_id, label: t.label }))}
+                  value={selectedTask}
+                  onChange={(val) => setSelectedTask(val)}
+                  placeholder="All Tasks"
+                  show={showTaskDropdown}
+                  onClose={() => setShowTaskDropdown(false)}
+                  disabled={!selectedProject}
+                />
+              </div>
+            </div>
+          </div>
+          {/* Filter Action Buttons */}
+          <div className="mt-2 flex justify-end gap-3">
+            <button
+              onClick={handleClearFilters}
+              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
+              type="button"
+            >
+              <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
+              Reset Filters
+            </button>
+            
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
+              type="button"
+              title="Refresh data"
+            >
+              <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span className="font-medium">{error}</span>
+          </div>
+        )}
+
+        {/* Table Container */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
+          <div className="overflow-x-auto">
+            <div className="max-h-[600px] overflow-y-auto">
+              <table className="min-w-full text-sm text-slate-700 table-fixed">
+                <colgroup><col style={{ width: '16%' }}/><col style={{ width: '16%' }}/><col style={{ width: '16%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '9%' }}/><col style={{ width: '7%' }}/></colgroup>
+                <thead className="bg-gradient-to-r from-blue-600 to-blue-700 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Date/Time</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Project</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Task</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Per Hour Target</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Production</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Billable Hours</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-center">Task File</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-20">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                          <span className="font-semibold text-slate-600">Loading trackers...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : trackers.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-20">
+                        <div className="flex flex-col items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                          </svg>
+                          <span className="text-slate-400 font-medium">No tracker data found</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : trackers.map((tracker, index) => (
+                    <tr key={tracker.tracker_id} className={`hover:bg-slate-50 transition-colors group ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                      <td className="px-5 py-4 align-middle text-slate-700 font-medium">
+                        <div className="flex flex-col">
+                          <span className="font-semibold">{formatDateTime(tracker.date_time).date}</span>
+                          <span className="text-xs text-slate-500">{formatDateTime(tracker.date_time).time}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-middle text-slate-700 font-medium">{tracker.project_name || getProjectName(tracker.project_id)}</td>
+                      <td className="px-5 py-4 align-middle text-slate-700">{tracker.task_name || getTaskName(tracker.task_id, tracker.project_id) || '-'}</td>
+                      <td className="px-5 py-4 align-middle text-slate-700 font-semibold">
+                        {tracker.tenure_target !== null && tracker.tenure_target !== undefined 
+                          ? Number(tracker.tenure_target).toFixed(2) 
+                          : '-'}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-slate-700 font-semibold">
+                        {tracker.production !== null && tracker.production !== undefined
+                          ? Number(tracker.production).toFixed(2)
+                          : '0.00'}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-slate-700 font-semibold">
+                        {tracker.billable_hours !== null && tracker.billable_hours !== undefined
+                          ? Number(tracker.billable_hours).toFixed(2)
+                          : "0.00"}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-center">
+                        {tracker.tracker_file ? (
+                          <a
+                            href={tracker.tracker_file}
+                            download
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center text-blue-600 hover:text-white hover:bg-blue-600 transition-all bg-blue-50 rounded-lg p-2 shadow-sm"
+                            title="Download file"
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        ) : (
+                          <span className="text-slate-300 font-medium">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-center">
+                        {isToday(tracker.date_time) ? (
+                          <button
+                            onClick={() => handleDelete(tracker.tracker_id)}
+                            disabled={deletingId === tracker.tracker_id}
+                            className="inline-flex items-center justify-center text-red-600 hover:text-white hover:bg-red-600 transition-all bg-red-50 rounded-lg p-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete Tracker"
+                            aria-label="Delete Tracker"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 font-medium">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Totals Summary Card */}
+        {!loading && trackers.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200 mt-6">
+            <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+              <div className="w-1.5 h-8 bg-gradient-to-b from-blue-600 to-blue-700 rounded-full"></div>
+              Summary Totals
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Per Hour Target */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl p-6 shadow-md hover:shadow-xl hover:scale-105 transition-all duration-300">
+                <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">Per Hour Target</p>
+                <p className="text-4xl font-extrabold text-blue-900">{totals.tenureTarget.toFixed(2)}</p>
+              </div>
+
+              {/* Production */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 rounded-2xl p-6 shadow-md hover:shadow-xl hover:scale-105 transition-all duration-300">
+                <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Production</p>
+                <p className="text-4xl font-extrabold text-green-900">{totals.production.toFixed(2)}</p>
+              </div>
+
+              {/* Billable Hours */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 rounded-2xl p-6 shadow-md hover:shadow-xl hover:scale-105 transition-all duration-300">
+                <p className="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Billable Hours</p>
+                <p className="text-4xl font-extrabold text-purple-900">{totals.billableHours.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete confirmation modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full transform transition-all">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-800">Confirm Delete</h3>
+              </div>
+              <p className="mb-6 text-slate-600 leading-relaxed">Are you sure you want to delete this tracker entry? This action cannot be undone.</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-6 py-2.5 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deletingId}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  onClick={confirmDelete}
+                  disabled={deletingId}
+                >
+                  {deletingId ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

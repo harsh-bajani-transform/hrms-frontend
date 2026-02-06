@@ -66,27 +66,12 @@ const AddProjectForm = ({
      return (
           <>
                {!isEditMode && (
-                    <div className="flex flex-col md:flex-row gap-2 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                         <div className="w-full">
-                              <label className="block text-xs font-bold text-slate-500 mb-1">Project Name</label>
-                              <input
-                                   type="text"
-                                   placeholder="Search by project name"
-                                   value={projectNameSearch || ""}
-                                   onChange={e => setProjectNameSearch(e.target.value)}
-                                   className="w-full p-2 border rounded-lg text-sm outline-none focus:border-blue-500 h-10"
-                              />
-                         </div>
-                         {/* Team Owner, APM, and QA filters removed as requested */}
-                              <div className="flex items-end">
-                                   <button
-                                        onClick={openModal}
-                                        className="bg-blue-600 text-white px-6 p-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center justify-center gap-2 h-10 min-h-[40px]"
-                                        style={{ height: '40px' }}>
-                                        <Plus className="w-4 h-4" /> Add
-                                   </button>
-                              </div>
-                    </div>
+                    <button
+                         onClick={openModal}
+                         className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 min-w-[140px]"
+                    >
+                         <Plus className="w-4 h-4" /> Add Project
+                    </button>
                )}
 
                {showModal && (
@@ -97,20 +82,16 @@ const AddProjectForm = ({
                                    <span className="text-blue-700 font-semibold">Loading project data...</span>
                               </div>
                          </div>
-                    ) :
-                    (Array.isArray(projectManagers) && projectManagers.length > 0 &&
-                     Array.isArray(assistantManagers) && assistantManagers.length > 0 &&
-                     Array.isArray(qaManagers) && qaManagers.length > 0 &&
-                     Array.isArray(teams) && teams.length > 0 ? (
+                    ) : (
                          <AddProjectFormModal
                               newProject={newProject}
                               onFieldChange={onFieldChange}
                               onSubmit={handleSubmit}
                               onClose={handleCloseModal}
-                              projectManagers={projectManagers}
-                              assistantManagers={assistantManagers}
-                              qaManagers={qaManagers}
-                              teams={teams}
+                              projectManagers={projectManagers || []}
+                              assistantManagers={assistantManagers || []}
+                              qaManagers={qaManagers || []}
+                              teams={teams || []}
                               formErrors={formErrors}
                               clearFieldError={clearFieldError}
                               isSubmitting={isSubmitting}
@@ -119,14 +100,7 @@ const AddProjectForm = ({
                               handleRemoveProjectFile={handleRemoveProjectFile}
                               isEditMode={isEditMode}
                          />
-                     ) : (
-                         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
-                              <div className="bg-white rounded-xl shadow-2xl p-8 flex flex-col items-center">
-                                   <span className="text-red-700 font-semibold mb-2">Failed to load required dropdown data.</span>
-                                   <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg" onClick={handleCloseModal}>Close</button>
-                              </div>
-                         </div>
-                     ))
+                    )
                )}
           </>
      );

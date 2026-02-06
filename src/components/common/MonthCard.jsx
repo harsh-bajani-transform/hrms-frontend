@@ -1,102 +1,134 @@
 import React, { useState, useMemo } from "react";
-import CustomSelect from "../common/CustomSelect";
+import { Download, ChevronUp, Search, X } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 
-export default function MonthCard({ month, users, onExport, onExportMonth, teamOptions = [] }) {
+export default function MonthCard({ month, users, onExport, onExportMonth, teamOptions = [], hideTeamColumn = false }) {
   const [expanded, setExpanded] = useState(false);
-  const [selectedTeam, setSelectedTeam] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const { isAgent } = useUser();
 
-  // Use teamOptions from API if provided, else fallback to unique teams from users
-  const teams = useMemo(() => {
-    if (teamOptions.length > 0) return [{ label: "All Teams", value: "" }, ...teamOptions.map(t => ({ label: t.label, value: t.label }))];
-    const unique = Array.from(new Set(users.map(u => u.team_name).filter(Boolean)));
-    return [{ label: "All Teams", value: "" }, ...unique.map(team => ({ label: team, value: team }))];
-  }, [users, teamOptions]);
-
-  // Only filter by team if not agent
-  const filteredUsers = !isAgent && selectedTeam
-    ? users.filter((u) => u.team_name === selectedTeam)
-    : users;
+  // Client-side search filter by user name
+  const filteredUsers = users.filter((u) => {
+    if (!searchQuery) return true;
+    const userName = (u.user_name || '').toLowerCase();
+    const query = searchQuery.toLowerCase();
+    return userName.includes(query);
+  });
 
   return (
-    <div className="relative bg-gradient-to-br from-blue-50 via-white to-slate-100 border-l-8 border-blue-500 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow duration-300 mb-6">
+    <div className="relative bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-l-4 border-blue-500 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 mb-6">
       <div
-        className="flex items-center gap-4 px-8 py-5 select-none rounded-t-2xl bg-white/80 backdrop-blur border-b border-blue-100"
-        style={{ minHeight: 72 }}
+        className="flex items-center gap-4 px-6 py-4 cursor-pointer select-none rounded-t-xl bg-white/90 backdrop-blur"
+        onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex flex-col justify-center">
-          <span className="text-2xl font-extrabold tracking-wide text-blue-700 leading-none" style={{fontFamily:'Inter,Segoe UI,sans-serif'}}>{month.label}</span>
-          <span className="text-xs text-slate-500 font-medium mt-1">{month.year}</span>
-        </div>
-        <div className="flex-1" />
-        {!isAgent && (
-          <div className="flex items-center gap-2 w-64 mr-4">
-            <CustomSelect
-              value={selectedTeam}
-              onChange={setSelectedTeam}
-              options={teams}
-              placeholder="Filter by Team"
-            />
-            <button
-              className="px-2 py-1 rounded bg-gray-300 hover:bg-gray-400 text-gray-800 text-xs font-semibold border border-gray-400 shadow-sm transition"
-              onClick={() => setSelectedTeam("")}
-              type="button"
-            >
-              Clear
-            </button>
+        {/* Month Badge */}
+        <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-lg px-4 py-2 shadow-md">
+            <div className="text-lg font-bold leading-none">{month.label}</div>
+            <div className="text-xs opacity-90 mt-0.5">{month.year}</div>
           </div>
-        )}
+          <div className="text-sm text-slate-600 font-medium">
+            {filteredUsers.length} {filteredUsers.length === 1 ? 'User' : 'Users'}
+          </div>
+        </div>
+        
+        <div className="flex-1" />
+        
+        {/* Export Month Button */}
         <button
-          className="px-3 py-1 rounded bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white text-xs font-semibold border border-green-700 shadow-sm transition mr-2"
-          onClick={e => { e.stopPropagation?.(); if (onExportMonth) onExportMonth(month, filteredUsers); }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+          onClick={e => { e.stopPropagation(); if (onExportMonth) onExportMonth(month, filteredUsers); }}
+          title="Export month summary"
         >
+          <Download className="w-4 h-4" />
           Export Month
         </button>
+        
+        {/* Expand/Collapse Button */}
         <button
-          className="p-2 rounded-full hover:bg-blue-100 transition"
+          className="p-2 rounded-lg hover:bg-blue-100 transition-colors duration-200"
           title={expanded ? "Collapse" : "Expand"}
-          aria-label={expanded ? "Collapse" : "Expand"}
-          onClick={() => setExpanded((e) => !e)}
+          onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`lucide lucide-chevron-up w-5 h-5 transition-transform duration-200 ${expanded ? '' : 'rotate-180'}`} aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>
+          <ChevronUp className={`w-5 h-5 text-blue-700 transition-transform duration-300 ${expanded ? '' : 'rotate-180'}`} />
         </button>
       </div>
       {expanded && (
-        <div className="p-8 bg-white/90 rounded-b-2xl">
-          <table className="min-w-full text-sm rounded-xl overflow-hidden shadow">
-            <thead className="bg-blue-50">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-blue-700">User Name / Team</th>
-                <th className="px-4 py-3 text-center font-semibold text-blue-700">Billable Hour Delivered</th>
-                <th className="px-4 py-3 text-center font-semibold text-blue-700">Monthly Goal</th>
-                <th className="px-4 py-3 text-center font-semibold text-blue-700">Pending Target</th>
-                <th className="px-4 py-3 text-center font-semibold text-blue-700">Avg. QC Score</th>
-                <th className="px-4 py-3 text-center font-semibold text-blue-700">Export</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user, idx) => (
-                <tr key={user.user_id || idx} className="hover:bg-blue-50 transition group">
-                  <td className="px-4 py-3 text-black font-medium whitespace-nowrap">
-                    {user.user_name}{user.team_name ? ` / ${user.team_name}` : ''}
-                  </td>
-                  <td className="px-4 py-3 text-center text-black">{user.total_billable_hours ? Number(user.total_billable_hours).toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-center text-black">{user.monthly_target ?? '-'}</td>
-                  <td className="px-4 py-3 text-center text-black">{user.pending_target ? Number(user.pending_target).toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-center text-black">{user.avg_qc_score ? Number(user.avg_qc_score).toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      className="px-3 py-1 rounded bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white text-xs font-semibold border border-green-700 shadow-sm transition"
-                      onClick={() => onExport(user)}
-                    >
-                      Export Daily
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="bg-white/80 backdrop-blur rounded-b-xl border-t border-blue-100">
+          {/* Search Filter */}
+          <div className="px-6 py-4 border-b border-blue-100">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by user name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 border-2 border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto p-6">
+            {filteredUsers.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                No users found matching "{searchQuery}"
+              </div>
+            ) : (
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-blue-200">
+                    <th className="px-4 py-3 text-left font-bold text-blue-700">User Name</th>
+                    {!hideTeamColumn && <th className="px-4 py-3 text-left font-bold text-blue-700">Team</th>}
+                    <th className="px-4 py-3 text-center font-bold text-blue-700">Billable Hours</th>
+                    <th className="px-4 py-3 text-center font-bold text-blue-700">Monthly Goal</th>
+                    <th className="px-4 py-3 text-center font-bold text-blue-700">Pending</th>
+                    <th className="px-4 py-3 text-center font-bold text-blue-700">Avg. QC</th>
+                    <th className="px-4 py-3 text-center font-bold text-blue-700">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-blue-100">
+                  {filteredUsers.map((user, idx) => {
+                    const formatNumber = (val) => {
+                      if (val === null || val === undefined || val === '') return '-';
+                      const num = Number(val);
+                      return isNaN(num) ? '-' : num.toFixed(2);
+                    };
+                    
+                    return (
+                      <tr key={user.user_id || idx} className="hover:bg-blue-50/50 transition-colors duration-150">
+                        <td className="px-4 py-3 text-slate-800 font-medium">{user.user_name || '-'}</td>
+                        {!hideTeamColumn && <td className="px-4 py-3 text-slate-600">{user.team_name || '-'}</td>}
+                        <td className="px-4 py-3 text-center text-slate-800 font-semibold">{formatNumber(user.total_billable_hours)}</td>
+                        <td className="px-4 py-3 text-center text-slate-800">{user.monthly_total_target ?? '-'}</td>
+                        <td className="px-4 py-3 text-center text-slate-800">{formatNumber(user.pending_target)}</td>
+                        <td className="px-4 py-3 text-center text-slate-800">{formatNumber(user.avg_qc_score)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => onExport(user)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-xs font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+                            title="Export user's daily data"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Export
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
     </div>

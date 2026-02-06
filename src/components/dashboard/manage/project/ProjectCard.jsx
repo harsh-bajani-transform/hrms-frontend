@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Edit, Trash2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Edit, Trash2, Plus, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import TaskTable from './TaskTable';
@@ -25,6 +25,66 @@ const ProjectCard = ({
   const [editTaskModal, setEditTaskModal] = useState({ open: false, task: null });
   const [showTasksModal, setShowTasksModal] = useState(false);
   const [taskTableRefresh, setTaskTableRefresh] = useState(Date.now());
+  const [showFilesDropdown, setShowFilesDropdown] = useState(false);
+  const [projectFiles, setProjectFiles] = useState([]);
+  const filesDropdownRef = useRef(null);
+  const filesButtonRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filesDropdownRef.current && !filesDropdownRef.current.contains(event.target) && 
+          filesButtonRef.current && !filesButtonRef.current.contains(event.target)) {
+        setShowFilesDropdown(false);
+      }
+    };
+    
+    const handleScroll = () => {
+      if (showFilesDropdown) {
+        setShowFilesDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true); // true for capture phase to catch all scrolls
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [showFilesDropdown]);
+
+  // Fetch project files when dropdown opens
+  const handleFilesDropdownToggle = async () => {
+    if (!showFilesDropdown) {
+      try {
+        const res = await fetchProjectsList(user?.user_id);
+        const projects = res.data || [];
+        const current = projects.find(p => p.project_id === (project.id || project.project_id));
+        if (current && current.project_files && Array.isArray(current.project_files)) {
+          setProjectFiles(current.project_files);
+        } else {
+          setProjectFiles([]);
+        }
+      } catch (err) {
+        console.error('[ProjectCard] Failed to fetch project files:', err);
+        toast.error('Failed to load project files');
+        setProjectFiles([]);
+      }
+    }
+    setShowFilesDropdown(!showFilesDropdown);
+  };
+
+  const handleDownloadFile = (fileUrl) => {
+    const fileName = fileUrl.split('/').pop() || 'project-file';
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.setAttribute('download', fileName);
+    link.setAttribute('target', '_blank');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Optionally, fetch project list if fetchList prop is true
   const [projects, setProjects] = useState([]);
@@ -64,119 +124,147 @@ const ProjectCard = ({
 
   return (
     <>
-      <div className="border border-slate-200 rounded-lg overflow-hidden">
-        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center">
-          {/* Left: Project name, icon, and actions */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 bg-slate-200 rounded-md">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-4 h-4 text-slate-700"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7V6a2 2 0 012-2h14a2 2 0 012 2v1M3 7h18M3 7v11a2 2 0 002 2h14a2 2 0 002-2V7M9 17h6" /></svg>
+      <div className="bg-white rounded-lg shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 overflow-visible">
+        {/* Card Header with White Background */}
+        <div className="bg-white border-b border-slate-200 px-6 py-4 rounded-t-lg">
+          <div className="flex items-center justify-between">
+            {/* Left: Project name and icon */}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="bg-gradient-to-br from-blue-100 to-indigo-100 p-2.5 rounded-lg flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5 text-blue-700"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7V6a2 2 0 012-2h14a2 2 0 012 2v1M3 7h18M3 7v11a2 2 0 002 2h14a2 2 0 002-2V7M9 17h6" /></svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-lg font-bold text-slate-800 truncate">{project.name}</h1>
+                <p className="text-slate-500 text-xs">Project Details & Tasks</p>
+              </div>
             </div>
-            <h1 className="text-sm font-bold text-slate-800 truncate">{project.name}</h1>
-            <div className="flex items-center gap-2 ml-4">
-              {/* Download Project File Button */}
-              <button
-                // Download Project File: fetch latest project_file from /project/list and open as direct link
-                onClick={async () => {
-                  try {
-                    // 1. Fetch latest project list with logged-in user ID
-                    const res = await fetchProjectsList(user?.user_id);
-                    const projects = res.data || [];
-                    console.log('[DEBUG] /project/list response:', projects);
-                    // 2. Find this project by id
-                    const current = projects.find(p => p.project_id === (project.id || project.project_id));
-                    console.log('[DEBUG] Selected project:', current);
-                    if (!current) {
-                      toast.error('Project not found in latest list.');
-                      return;
-                    }
-                    if (!current.project_file || current.project_file === 'null') {
-                      toast.error('No file available for this project. (project_file is null or empty)');
-                      return;
-                    }
-                    const filePath = current.project_file;
-                    console.log('[DEBUG] Resolved filePath:', filePath);
-                    // Extract file name from path
-                    const fileName = filePath.split(/[\\/]/).filter(Boolean).pop() || 'project-file';
-                    // 3. Attempt to download file by opening the filePath as a direct link
-                    // This will only work if the backend serves the file statically
-                    const link = document.createElement('a');
-                    link.href = filePath;
-                    link.setAttribute('download', fileName);
-                    document.body.appendChild(link);
-                    link.click();
-                    link.parentNode.removeChild(link);
-                  } catch (err) {
-                    console.error('[DEBUG] Download error:', err);
-                    toast.error('Failed to download file. See console for details.');
-                  }
-                }}
-                className="p-0 bg-transparent focus:outline-none group"
-                title="Download Project File"
-                aria-label="Download Project File"
-                style={{
-                  borderRadius: '9999px',
-                  background: 'linear-gradient(90deg, #e0e7ff 0%, #bae6fd 100%)',
-                  boxShadow: '0 2px 8px 0 rgba(59,130,246,0.08)',
-                  marginRight: '2px',
-                  transition: 'background 0.2s, box-shadow 0.2s',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                onMouseOver={e => {
-                  e.currentTarget.style.background = 'linear-gradient(90deg, #2563eb 0%, #38bdf8 100%)';
-                  e.currentTarget.style.boxShadow = '0 4px 16px 0 rgba(59,130,246,0.16)';
-                }}
-                onMouseOut={e => {
-                  e.currentTarget.style.background = 'linear-gradient(90deg, #e0e7ff 0%, #bae6fd 100%)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px 0 rgba(59,130,246,0.08)';
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-download w-5 h-5" aria-hidden="true" style={{transition: 'color 0.2s'}}><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg>
-              </button>
-              <button
-                onClick={() => openEditModal(project)}
-                className="p-0 bg-transparent hover:bg-transparent focus:outline-none"
-                title="Edit Project"
-                aria-label="Edit Project"
-              >
-                <Edit
-                  className="w-6 h-6 text-blue-500 bg-blue-100 bg-opacity-40 rounded-full p-1 transition-colors duration-200 hover:text-white hover:bg-blue-500 hover:bg-opacity-100"
-                />
-              </button>
-              <button
-                onClick={() => openDeleteModal(project)}
-                className="p-0 bg-transparent hover:bg-transparent focus:outline-none"
-                title="Delete Project"
-                aria-label="Delete Project"
-              >
-                <Trash2
-                  className="w-6 h-6 text-red-500 bg-red-100 bg-opacity-40 rounded-full p-1 transition-colors duration-200 hover:text-white hover:bg-red-500 hover:bg-opacity-100"
-                />
-              </button>
-               <button
-                 onClick={() => setShowTasksModal(true)}
-                 className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition"
-                 title="Create Task"
-               >
-                 <Plus className="w-4 h-4" />
-                 Create Task
-               </button>
-            </div>
+            
+            {/* Right: Expand/Collapse Button */}
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="ml-4 p-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition-all duration-200 flex-shrink-0"
+              title={expanded ? 'Collapse' : 'Expand'}
+              aria-label={expanded ? 'Collapse' : 'Expand'}
+            >
+              {expanded ? <ChevronUp className="w-5 h-5 text-slate-700" /> : <ChevronDown className="w-5 h-5 text-slate-700" />}
+            </button>
           </div>
-          {/* Right side: Arrow button to hide/show task list */}
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="ml-auto p-2 rounded-full hover:bg-slate-200 transition"
-            title={expanded ? 'Collapse' : 'Expand'}
-            aria-label={expanded ? 'Collapse' : 'Expand'}
-          >
-            {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </button>
         </div>
+
+        {/* Actions Bar */}
+        <div className={`bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-3 ${expanded ? 'border-b border-slate-200' : 'rounded-b-lg'}`}>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Download Project Files Button with Dropdown */}
+            <div className="relative inline-block">
+              <button
+                ref={filesButtonRef}
+                onClick={handleFilesDropdownToggle}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-purple-200 text-purple-700 rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-all duration-200 shadow-sm hover:shadow group"
+                title="View Project Files"
+                aria-label="View Project Files"
+              >
+                <Download className="w-4 h-4" />
+                <span className="text-sm font-medium">Files</span>
+                <ChevronDown className="w-3.5 h-3.5 ml-1 group-hover:translate-y-0.5 transition-transform" />
+              </button>
+              
+              {/* Dropdown attached to button */}
+              {showFilesDropdown && (
+                <div 
+                  ref={filesDropdownRef}
+                  className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999] max-h-96 overflow-hidden animate-fade-in"
+                >
+                  {projectFiles.length === 0 ? (
+                    <div className="px-6 py-8 text-center">
+                      <div className="bg-slate-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Download className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-600 mb-1">No files available</p>
+                      <p className="text-xs text-slate-400">Upload files to get started</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3">
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Download className="w-4 h-4" />
+                          Project Files
+                        </h4>
+                        <p className="text-xs text-purple-100 mt-0.5">{projectFiles.length} file{projectFiles.length !== 1 ? 's' : ''} available</p>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto">
+                        {projectFiles.map((fileUrl, index) => {
+                          const fileName = fileUrl.split('/').pop() || `File ${index + 1}`;
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between px-4 py-3 hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 cursor-pointer group border-b border-slate-100 last:border-0 transition-all duration-200"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadFile(fileUrl);
+                              }}
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="bg-purple-100 p-2 rounded-lg group-hover:bg-purple-200 transition-colors">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 flex-shrink-0">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-800 truncate group-hover:text-purple-700 transition-colors" title={fileName}>
+                                    {fileName}
+                                  </p>
+                                  <p className="text-xs text-slate-500">Click to download</p>
+                                </div>
+                              </div>
+                              <Download className="w-5 h-5 text-slate-400 group-hover:text-purple-600 transition-colors flex-shrink-0 group-hover:translate-y-0.5 group-hover:scale-110" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Edit Button */}
+            <button
+              onClick={() => openEditModal(project)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-sm hover:shadow"
+              title="Edit Project"
+              aria-label="Edit Project"
+            >
+              <Edit className="w-4 h-4" />
+              <span className="text-sm font-medium">Edit</span>
+            </button>
+
+            {/* Delete Button */}
+            <button
+              onClick={() => openDeleteModal(project)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200 shadow-sm hover:shadow"
+              title="Delete Project"
+              aria-label="Delete Project"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="text-sm font-medium">Delete</span>
+            </button>
+
+            {/* Add Task Button */}
+            <button
+              onClick={() => setShowTasksModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md ml-auto"
+              title="Add New Task"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-sm font-medium">Add Task</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Task Table Section */}
         {expanded && (
-          <div className="px-4 py-3">
+          <div className="px-6 py-4 bg-white rounded-b-lg">
             <TaskTable
               project={project}
               readOnly={readOnly}

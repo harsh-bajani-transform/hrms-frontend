@@ -18,7 +18,7 @@ export const fetchDailyBillableReport = async (payload = {}) => {
   if (process.env.NODE_ENV !== 'production') {
     console.log('[fetchDailyBillableReport] Payload:', reqBody);
   }
-  const res = await api.post("/python/tracker/view_daily", reqBody);
+  const res = await api.post("/tracker/view_daily", reqBody);
   return res.data;
 };
 

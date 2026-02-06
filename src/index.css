@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Fix header shift by reserving scrollbar space */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 *,.font-inter {
   font-family: 'Inter', sans-serif;
 }

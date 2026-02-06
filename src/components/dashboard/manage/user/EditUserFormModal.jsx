@@ -21,6 +21,7 @@ const EditUserFormModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [profilePreview, setProfilePreview] = useState(null);
+  const [profileFile, setProfileFile] = useState(null);
 
   // Fetch user data and dropdowns on open
   useEffect(() => {
@@ -62,6 +63,16 @@ const EditUserFormModal = ({
             return result;
           };
           
+          // Helper to extract all IDs from array string like "[110, 111]" or from array [110, 111]
+          const extractAllIds = (value) => {
+            if (!value) return [];
+            if (Array.isArray(value)) return value.map(id => String(id));
+            const str = String(value);
+            // Match all numbers in the string
+            const matches = str.match(/\d+/g);
+            return matches ? matches : [];
+          };
+          
           // Extract role_id
           let roleValue = user.role_id || '';
           if (!roleValue && user.role && dropdownData.roles) {
@@ -79,8 +90,20 @@ const EditUserFormModal = ({
                        '';
           }
           
+          // Extract project_manager_id (could be "[110]" or "[110,111]" or array)
+          const projectManagerIds = extractAllIds(user.project_manager_id);
+          
+          // Extract asst_manager_id (could be "[111]" or "[111,113]" or array)
+          const assistantManagerIds = extractAllIds(user.asst_manager_id);
+          
+          // Extract qa_id (could be "[116]" or "[116,114]" or array)
+          const qaIds = extractAllIds(user.qa_id);
+          
           log('[EditUserFormModal] Role mapping - input:', user.role, 'role_id:', user.role_id, 'mapped:', roleValue);
           log('[EditUserFormModal] Team mapping - input:', user.team_name, 'team_id:', user.team_id, 'mapped:', teamValue);
+          log('[EditUserFormModal] Project Manager IDs extracted:', projectManagerIds, 'from:', user.project_manager_id);
+          log('[EditUserFormModal] Assistant Manager IDs extracted:', assistantManagerIds, 'from:', user.asst_manager_id);
+          log('[EditUserFormModal] QA IDs extracted:', qaIds, 'from:', user.qa_id);
           log('[EditUserFormModal] Available roles:', dropdownData.roles);
           log('[EditUserFormModal] Available teams:', dropdownData.teams);
           
@@ -96,23 +119,12 @@ const EditUserFormModal = ({
               getIdByLabel(dropdownData.designations, user.designation, 'designation_id', 'label') ||
               ''
             ),
-            projectManager: String(
-              user.project_manager_id ||
-              getIdByLabel(dropdownData.projectManagers, user.project_manager, 'user_id', 'label') ||
-              getIdByLabel(dropdownData.projectManagers, user.project_manager_name, 'user_id', 'label') ||
-              ''
-            ),
-            assistantManager: String(
-              user.assistant_manager_id ||
-              getIdByLabel(dropdownData.assistantManagers, user.asst_manager, 'user_id', 'label') ||
-              getIdByLabel(dropdownData.assistantManagers, user.assistant_manager, 'user_id', 'label') ||
-              ''
-            ),
-            qualityAnalyst: String(
-              user.qa_id ||
-              getIdByLabel(dropdownData.qas, user.qa, 'user_id', 'label') ||
-              ''
-            ),
+            projectManager: projectManagerIds[0] || '', // Keep for backward compatibility
+            assistantManager: assistantManagerIds[0] || '', // Keep for backward compatibility
+            qualityAnalyst: qaIds[0] || '', // Keep for backward compatibility
+            projectManagers: projectManagerIds, // Array for multi-select
+            assistantManagers: assistantManagerIds, // Array for multi-select
+            qualityAnalysts: qaIds, // Array for multi-select
             team: String(teamValue || ''), // Convert to string for select element
             tenure: user.user_tenure || user.tenure || "",
             address: user.user_address || user.address || "",
@@ -120,6 +132,10 @@ const EditUserFormModal = ({
           
           log('[EditUserFormModal] Final userData being set:', newUserData);
           log('[EditUserFormModal] userData.role:', newUserData.role, 'type:', typeof newUserData.role);
+          log('[EditUserFormModal] userData.designation:', newUserData.designation);
+          log('[EditUserFormModal] userData.projectManagers:', newUserData.projectManagers);
+          log('[EditUserFormModal] userData.assistantManagers:', newUserData.assistantManagers);
+          log('[EditUserFormModal] userData.qualityAnalysts:', newUserData.qualityAnalysts);
           log('[EditUserFormModal] userData.team:', newUserData.team, 'type:', typeof newUserData.team);
           
           setUserData(newUserData);
@@ -174,23 +190,36 @@ const EditUserFormModal = ({
         address: 'user_address',
         role: 'role_id',
         designation: 'designation_id',
-        projectManager: 'project_manager_id',
-        assistantManager: 'asst_manager_id',  // Database uses 'asst_manager_id' not 'assistant_manager_id'
-        qualityAnalyst: 'qa_id',
+        projectManagers: 'project_manager_id', // Array field
+        assistantManagers: 'asst_manager_id',  // Array field
+        qualityAnalysts: 'qa_id', // Array field
         team: 'team_id'
       };
       
-      // Fields that need to be sent as arrays (NOT team_id - that's just a number)
-      const arrayFields = ['asst_manager_id', 'qa_id'];
+      // Fields that need to be sent as arrays
+      const arrayFields = ['project_manager_id', 'asst_manager_id', 'qa_id'];
       
       // Fields that should be converted to numbers
-      const numberFields = ['role_id', 'designation_id', 'project_manager_id', 'team_id', 'user_tenure'];
+      const numberFields = ['role_id', 'designation_id', 'team_id', 'user_tenure'];
       
       // Add only changed fields to payload
       const changedFieldsLog = [];
       Object.entries(fieldMapping).forEach(([frontendKey, backendKey]) => {
         const currentValue = userData[frontendKey];
         const originalValue = originalUserData?.[frontendKey];
+        
+        // Special handling for array fields
+        if (arrayFields.includes(backendKey)) {
+          const currentArray = Array.isArray(currentValue) ? currentValue : [];
+          const originalArray = Array.isArray(originalValue) ? originalValue : [];
+          const hasChanged = JSON.stringify(currentArray.sort()) !== JSON.stringify(originalArray.sort());
+          
+          if (hasChanged || currentArray.length > 0) {
+            payload[backendKey] = currentArray.map(id => Number(id));
+            changedFieldsLog.push(`${frontendKey} → ${backendKey}: ${JSON.stringify(originalArray)} → ${JSON.stringify(payload[backendKey])} (array)`);
+          }
+          return;
+        }
         
         // Normalize values to strings for comparison (to handle "3" vs 3)
         const currentStr = String(currentValue || '');
@@ -208,13 +237,8 @@ const EditUserFormModal = ({
         
         // Only include if value has changed and is not empty
         if (hasChanged && currentValue !== null && currentValue !== undefined && currentValue !== "") {
-          // Convert to array with NUMBER values if this field needs to be stored as an array
-          if (arrayFields.includes(backendKey)) {
-            payload[backendKey] = [Number(currentValue)];
-            changedFieldsLog.push(`${frontendKey} → ${backendKey}: "${originalValue}" → [${Number(currentValue)}] (array)`);
-          } 
           // Convert to NUMBER if this field should be numeric
-          else if (numberFields.includes(backendKey)) {
+          if (numberFields.includes(backendKey)) {
             payload[backendKey] = Number(currentValue);
             changedFieldsLog.push(`${frontendKey} → ${backendKey}: "${originalValue}" → ${Number(currentValue)} (number)`);
           } 
@@ -230,10 +254,10 @@ const EditUserFormModal = ({
         log('[EditUserFormModal] 📝 Fields being updated:', changedFieldsLog);
       }
       
-      // Add profile picture if changed
-      if (profilePreview && profilePreview !== originalUserData?.profile_picture) {
-        payload.profile_picture = profilePreview;
-        log('[EditUserFormModal] 📷 Profile picture changed');
+      // Track if profile picture changed (will be added to FormData later)
+      const hasProfilePictureChanged = profileFile !== null;
+      if (hasProfilePictureChanged) {
+        log('[EditUserFormModal] 📷 Profile picture changed - will upload file');
       }
       
       // If only user_id, device_id, device_type are present, no changes were made
@@ -249,7 +273,25 @@ const EditUserFormModal = ({
       log('[EditUserFormModal] 📤 Complete payload being sent:', JSON.stringify(payload, null, 2));
       log('[EditUserFormModal] 📋 Changed field keys:', changedFields);
       
-      const res = await updateUser(payload);
+      // Convert payload to FormData for multipart/form-data submission
+      const formData = new FormData();
+      Object.entries(payload).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          // Send arrays as JSON string
+          formData.append(key, JSON.stringify(value));
+        } else {
+          formData.append(key, value);
+        }
+      });
+      
+      // Add profile picture file if changed
+      if (profileFile) {
+        formData.append('profile_picture', profileFile);
+        log('[EditUserFormModal] 📷 Appending profile picture file:', profileFile.name);
+      }
+      
+      log('[EditUserFormModal] 📤 Sending as FormData');
+      const res = await updateUser(formData);
       
       if (res.status === 200) {
         log('[EditUserFormModal] ✅ Backend returned success');
@@ -281,11 +323,17 @@ const EditUserFormModal = ({
   // Profile picture change
   const handleProfilePictureChange = (file) => {
     if (!file) return;
+    // Store the File object for upload
+    setProfileFile(file);
+    // Create preview URL for display
     const reader = new FileReader();
     reader.onloadend = () => setProfilePreview(reader.result);
     reader.readAsDataURL(file);
   };
-  const handleRemoveProfilePicture = () => setProfilePreview(null);
+  const handleRemoveProfilePicture = () => {
+    setProfilePreview(null);
+    setProfileFile(null);
+  };
 
   if (!isOpen || !userData) return null;
 
