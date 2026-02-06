@@ -177,7 +177,6 @@
 // useProjectManagement.js
 import { useState } from 'react';
 import { addTask, createProject, updateProject, deleteProject, updateTask, deleteTask as deleteTaskApi } from '../services/projectService';
-import { fileToBase64 } from '../utils/fileToBase64'
 import { toast } from "react-hot-toast";
 import { useDeviceInfo } from "./useDeviceInfo";
 
@@ -235,27 +234,36 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
           setIsSubmitting(true);
 
           try {
-               let fileBase64 = null;
+               // Create FormData instead of JSON payload
+               const formData = new FormData();
+               
+               // Append basic fields
+               formData.append('project_name', newProject.name.trim());
+               formData.append('project_code', newProject.code.trim());
+               formData.append('project_description', newProject.description?.trim() || '');
+               formData.append('project_manager_id', Number(newProject.projectManagerId));
+               
+               // Append array fields as JSON strings (backend expects this format)
+               formData.append('asst_project_manager_id', JSON.stringify(newProject.assistantManagerIds.map(id => Number(id))));
+               formData.append('project_qa_id', JSON.stringify(newProject.qaManagerIds.map(id => Number(id))));
+               formData.append('project_team_id', JSON.stringify(newProject.teamIds.map(id => Number(id))));
+               
+               // Append file if exists
                if (projectFiles && projectFiles.length > 0) {
-                    // Only take the first file
-                    const base64Arr = await fileToBase64([projectFiles[0]]);
-                    fileBase64 = base64Arr[0];
+                    formData.append('file', projectFiles[0]);
+               }
+               
+               // Append device info
+               formData.append('device_id', deviceInfo.device_id);
+               formData.append('device_type', deviceInfo.device_type);
+               
+               // Debug log
+               console.log('[AddProject] FormData entries:');
+               for (let pair of formData.entries()) {
+                    console.log(pair[0], pair[1]);
                }
 
-               const payload = {
-                    project_name: newProject.name.trim(),
-                    project_code: newProject.code.trim(),
-                    project_description: newProject.description?.trim() || null,
-                    project_manager_id: Number(newProject.projectManagerId),
-                    asst_project_manager_id: newProject.assistantManagerIds.map(id => Number(id)),
-                    project_qa_id: newProject.qaManagerIds.map(id => Number(id)),
-                    project_team_id: newProject.teamIds.map(id => Number(id)),
-                    ...(fileBase64 ? { file: fileBase64 } : {}),
-               };
-               // Debug log
-               console.log('[AddProject] Payload:', JSON.stringify(payload, null, 2));
-
-               const response = await createProject(payload);
+               const response = await createProject(formData);
 
                if (response?.status === 200 || response?.status === 201) {
                     resetNewProjectForm();
@@ -341,8 +349,6 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
 
           if (!projectData.code?.trim()) {
                errors.code = "This field is required";
-          } else if (!/^[a-zA-Z0-9]+$/.test(projectData.code)) {
-               errors.code = "Only alphanumeric characters allowed";
           }
 
           if (!projectData.projectManagerId) {
@@ -369,24 +375,40 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
           setIsSubmitting(true);
 
           try {
-               let base64Files = [];
+               // Create FormData instead of JSON payload
+               const formData = new FormData();
+               
+               // Append basic fields
+               formData.append('project_name', projectData.name.trim());
+               formData.append('project_code', projectData.code.trim());
+               formData.append('project_description', projectData.description?.trim() || '');
+               formData.append('project_manager_id', Number(projectData.projectManagerId));
+               
+               // Append array fields as JSON strings (backend expects this format)
+               formData.append('asst_project_manager_id', JSON.stringify(projectData.assistantManagerIds.map(id => Number(id))));
+               formData.append('project_qa_id', JSON.stringify(projectData.qaManagerIds.map(id => Number(id))));
+               formData.append('project_team_id', JSON.stringify(projectData.teamIds.map(id => Number(id))));
+               
+               // Append file if exists (only if user selected a new file, not existing)
                if (projectFiles && projectFiles.length > 0) {
-                    base64Files = await fileToBase64(projectFiles);
+                    // Check if it's a real File object (new upload) vs existing file metadata
+                    const file = projectFiles[0];
+                    if (file instanceof File) {
+                         formData.append('file', file);
+                    }
+               }
+               
+               // Append device info
+               formData.append('device_id', deviceInfo.device_id);
+               formData.append('device_type', deviceInfo.device_type);
+               
+               // Debug log
+               console.log('[UpdateProject] FormData entries:');
+               for (let pair of formData.entries()) {
+                    console.log(pair[0], pair[1]);
                }
 
-               const payload = {
-                    project_id: editingProjectId,
-                    project_name: projectData.name.trim(),
-                    project_code: projectData.code.trim(),
-                    project_description: projectData.description?.trim() || null,
-                    project_manager_id: Number(projectData.projectManagerId),
-                    asst_project_manager_id: projectData.assistantManagerIds.map(id => Number(id)),
-                    project_qa_id: projectData.qaManagerIds.map(id => Number(id)),
-                    project_team_id: projectData.teamIds.map(id => Number(id)),
-                    ...(base64Files.length > 0 && { files: base64Files }),
-               };
-
-               const response = await updateProject(editingProjectId, payload);
+               const response = await updateProject(editingProjectId, formData);
 
                if (response?.status === 200 || response?.status === 201) {
                     toast.success("Project updated successfully!", {
@@ -487,7 +509,7 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                     [field]: value
                };
 
-               await projectService.updateProject(id, updatePayload);
+               await updateProject(id, updatePayload);
 
                // Update local state
                const updated = initialProjects.map(p =>
