@@ -496,17 +496,20 @@ const UsersManagement = ({
                const userName = user.user_name || user.name || user.email || 'User';
                log('[UsersManagement] Toggling user status for:', userName, 'userId:', userId, 'from:', currentStatus, 'to:', newStatus);
                
-               // Prepare payload for update
-               const payload = {
-                    user_id: String(userId),
-                    device_id: deviceInfo.device_id || 'web',
-                    device_type: deviceInfo.device_type || 'Laptop',
-                    is_active: newStatus
-               };
+               // Convert payload to FormData
+               const formData = new FormData();
+               formData.append('user_id', String(userId));
+               formData.append('device_id', deviceInfo.device_id || 'web');
+               formData.append('device_type', deviceInfo.device_type || 'Laptop');
+               formData.append('is_active', String(newStatus));
                
-               console.log('[UsersManagement] Update payload:', JSON.stringify(payload, null, 2));
+               console.log('[UsersManagement] Update FormData created with:');
+               console.log('  - user_id:', String(userId));
+               console.log('  - device_id:', deviceInfo.device_id || 'web');
+               console.log('  - device_type:', deviceInfo.device_type || 'Laptop');
+               console.log('  - is_active:', String(newStatus));
 
-               await updateUser(payload);
+               await updateUser(formData);
                
                toast.success(`User ${newStatus === 1 ? 'activated' : 'deactivated'} successfully`);
                

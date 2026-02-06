@@ -18,6 +18,12 @@ api.interceptors.request.use(
       requestConfig.headers.Authorization = `Bearer ${token}`;
     }
     
+    // If the request data is FormData, remove Content-Type to let browser set it with boundary
+    if (requestConfig.data instanceof FormData) {
+      delete requestConfig.headers['Content-Type'];
+      log('[API Request] Detected FormData, removed Content-Type header');
+    }
+    
     log(`[API Request] ${requestConfig.method?.toUpperCase()} ${requestConfig.url}`);
     
     return requestConfig;

@@ -128,6 +128,24 @@ export const fetchUsersList = async (userId, deviceId, deviceType) => {
 
 export const updateUser = async (userData) => {
   try {
+    // Check if userData is FormData
+    if (userData instanceof FormData) {
+      log('[authService] Sending FormData for user update');
+      const userId = userData.get('user_id');
+      log('[authService] Updating user (FormData):', userId);
+      
+      // Log all FormData entries for debugging
+      for (let pair of userData.entries()) {
+        log(`[authService] FormData entry: ${pair[0]} = ${pair[1]}`);
+      }
+      
+      // api.js interceptor will handle removing Content-Type for FormData
+      const response = await api.post('/user/update_user', userData);
+      log('[authService] User updated successfully');
+      return response.data;
+    }
+    
+    // Regular JSON payload
     log('[authService] Updating user:', userData.user_id);
     const response = await api.post('/user/update_user', userData);
     log('[authService] User updated successfully');
