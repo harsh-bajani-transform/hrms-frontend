@@ -134,19 +134,19 @@ const AgentDashboard = ({ embedded = false }) => {
     setBaseTargetLoading(false);
   }, [selectedProject, selectedTask, projects, user]);
 
-  // Handle file upload with 1MB size validation
+  // Handle file upload with 10MB size validation
   const handleFileChange = async (e) => {
     const fileObj = e.target.files[0];
     if (!fileObj) return;
     
-    // Validate file size (1MB = 1048576 bytes)
-    const maxSize = 1 * 1024 * 1024; // 1MB in bytes
+    // Validate file size (10MB = 10485760 bytes)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
     if (fileObj.size > maxSize) {
-      setFileError("File size must not exceed 1MB");
+      setFileError("File size must not exceed 10MB");
       setFile(null);
       setFilePreview(null);
       setFileBase64(null);
-      toast.error("File size exceeds 1MB limit", { duration: 4000 });
+      toast.error("File size exceeds 10MB limit", { duration: 4000 });
       // Reset the input
       e.target.value = null;
       return;
@@ -536,7 +536,7 @@ const AgentDashboard = ({ embedded = false }) => {
                           <>Click to upload <span className="text-blue-600">or drag and drop</span></>
                         )}
                       </p>
-                      <p className="text-xs text-slate-500 mt-1">Max file size: 1MB</p>
+                      <p className="text-xs text-slate-500 mt-1">Max file size: 10MB</p>
                     </div>
                   </div>
                   <input
