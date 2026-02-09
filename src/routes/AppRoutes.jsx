@@ -24,6 +24,7 @@ import OverviewTab from '../components/dashboard/overview/OverviewTab';
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 import LoginPage from "../pages/LoginPage";
+import ResetPasswordPage from "../pages/ResetPasswordPage";
 import DashboardPage from "../pages/DashboardPage";
 import AdminPage from "../pages/AdminPage";
 import AgentDashboard from "../components/AgentDashboard/AgentDashboard.jsx";
@@ -39,14 +40,17 @@ const AppRoutes = () => {
   // Role-based redirect for already-logged-in users (use role_id)
   const getDashboardRoute = () => {
     if (!user) return "/";
-    // Agents and all users go to /dashboard (analytics/overview for agents)
+    // Agents go to /agent (tracker entry) by default
+    if (user.role_id === 6) return "/agent";
+    // All other users go to /dashboard
     return "/dashboard";
   };
 
   return (
     <Routes>
-        {/* Public route */}
+        {/* Public routes */}
         <Route path="/" element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* Agent Dashboard (Data Entry) */}
         <Route

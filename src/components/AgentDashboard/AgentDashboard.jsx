@@ -8,6 +8,8 @@ import { useDeviceInfo } from '../../hooks/useDeviceInfo';
 import { fileToBase64 } from "../../utils/fileToBase64";
 import { useAuth } from "../../context/AuthContext";
 import { log, logError } from "../../config/environment";
+import CustomSelect from "../common/CustomSelect";
+import { Briefcase, ListChecks } from "lucide-react";
 
 
 
@@ -34,6 +36,7 @@ const AgentDashboard = ({ embedded = false }) => {
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const [fileBase64, setFileBase64] = useState(null);
+  const [fileError, setFileError] = useState("");
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -131,10 +134,26 @@ const AgentDashboard = ({ embedded = false }) => {
     setBaseTargetLoading(false);
   }, [selectedProject, selectedTask, projects, user]);
 
-  // Handle file upload
+  // Handle file upload with 1MB size validation
   const handleFileChange = async (e) => {
     const fileObj = e.target.files[0];
     if (!fileObj) return;
+    
+    // Validate file size (1MB = 1048576 bytes)
+    const maxSize = 1 * 1024 * 1024; // 1MB in bytes
+    if (fileObj.size > maxSize) {
+      setFileError("File size must not exceed 1MB");
+      setFile(null);
+      setFilePreview(null);
+      setFileBase64(null);
+      toast.error("File size exceeds 1MB limit", { duration: 4000 });
+      // Reset the input
+      e.target.value = null;
+      return;
+    }
+    
+    // Clear any previous error
+    setFileError("");
     
     log('[AgentDashboard] File selected:', fileObj.name);
     setFile(fileObj);
@@ -147,6 +166,7 @@ const AgentDashboard = ({ embedded = false }) => {
     } catch (error) {
       logError('[AgentDashboard] Error converting file:', error);
       setFileBase64(null);
+      setFileError("Failed to process file");
       toast.error("Failed to process file");
     }
   };
@@ -201,28 +221,52 @@ const AgentDashboard = ({ embedded = false }) => {
       setErrors(clientErrors);
       forceUpdate(n => n + 1);
       
-      // Check for validation errors
+      // Check for validation errors or file error
       if (Object.keys(clientErrors).length > 0) {
+        return;
+      }
+      
+      if (fileError) {
+        toast.error("Please fix file upload errors before submitting", { duration: 4000 });
         return;
       }
       
       setSubmitting(true);
       
-      // Prepare payload for /tracker/add
-      const payload = {
-        project_id: Number(selectedProject),
-        task_id: Number(selectedTask),
-        user_id: user?.user_id,
-        production: Number(productionTarget),
-        tenure_target: Number(baseTarget),
-        tracker_file: fileBase64 || undefined
-      };
+      // Validate again before submission to ensure all fields are present
+      if (!selectedProject || !selectedTask || !productionTarget) {
+        toast.error("Please fill in all required fields");
+        setSubmitting(false);
+        return;
+      }
+      
+      // Prepare FormData payload for /tracker/add (multipart/form-data)
+      const formData = new FormData();
+      formData.append('project_id', Number(selectedProject));
+      formData.append('task_id', Number(selectedTask));
+      formData.append('user_id', user?.user_id);
+      formData.append('production', Number(productionTarget));
+      formData.append('tenure_target', Number(baseTarget));
+      
+      // Append the actual file if it exists
+      if (file) {
+        formData.append('tracker_file', file);
+      }
       
       try {
-        log('[AgentDashboard] Submitting tracker:', payload);
-        const res = await api.post("/tracker/add", payload);
+        log('[AgentDashboard] Submitting tracker with FormData');
+        const res = await api.post("/tracker/add", formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
         
-        if (res.data?.status === 201) {
+        // Log full response
+        console.log('[AgentDashboard] Full API Response:', res);
+        console.log('[AgentDashboard] Response Data:', res.data);
+        console.log('[AgentDashboard] Response Status:', res.status);
+        
+        if (res.data?.status === 201 || res.status === 201 || res.status === 200) {
           log('[AgentDashboard] Tracker added successfully');
           toast.success("Tracker added successfully!");
           
@@ -234,6 +278,7 @@ const AgentDashboard = ({ embedded = false }) => {
           setFile(null);
           setFilePreview(null);
           setFileBase64(null);
+          setFileError("");
           setTouched({});
           
           // Automatically switch to "View All" to show the newly added tracker
@@ -271,165 +316,282 @@ const AgentDashboard = ({ embedded = false }) => {
       ) : (
         <div className="space-y-8 max-w-[880px] mx-auto py-5">
           {/* Data Entry Form */}
-          <div className="flex flex-col items-center justify-center min-h-[80vh] w-full">
-            <div className="w-full max-w-[680px] rounded-t-2xl bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500 flex flex-col sm:flex-row items-center justify-between px-7 py-5 mb-0 shadow-xl" style={{ minWidth: 400 }}>
-              <div className="flex items-center gap-3 text-white">
-                <span className="text-3xl">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-circle-plus w-8 h-8" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
-                </span>
-                <div>
-                  <div className="font-extrabold text-2xl leading-tight tracking-tight drop-shadow">New Production Entry</div>
-                  <div className="text-base opacity-90">Log output as <span className="font-bold underline underline-offset-2">{user?.user_name || user?.name || "-"}</span></div>
+          <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+            {/* Modern Header */}
+            <div className="w-full max-w-[920px] bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl px-8 py-5 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                      <path d="M12 20h9"></path>
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white tracking-tight cursor-default">Production Tracker</h2>
+                    <p className="text-blue-100 text-sm font-medium mt-1 cursor-default">Logged in as <span className="font-semibold text-white">{user?.user_name || user?.name || "-"}</span></p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 mt-4 sm:mt-0">
-                <span className="text-white text-base font-bold tracking-wide">DATE</span>
-                <input
-                  type="text"
-                  className="rounded-lg px-3 py-1.5 text-base border-0 focus:ring-2 focus:ring-blue-300 bg-white font-bold shadow"
-                  value={entryDate}
-                  readOnly
-                  style={{ color: '#1e293b', fontWeight: 700, cursor: 'not-allowed', width: '120px', minWidth: '0' }}
-                  tabIndex={-1}
-                />
+                <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2.5 border border-white/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
+                    <line x1="16" x2="16" y1="2" y2="6"></line>
+                    <line x1="8" x2="8" y1="2" y2="6"></line>
+                    <line x1="3" x2="21" y1="10" y2="10"></line>
+                  </svg>
+                  <span className="text-white font-semibold text-sm">{new Date(entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                </div>
               </div>
             </div>
+
+            {/* Form Card */}
             <form
-              className="bg-white rounded-b-2xl shadow-2xl p-8 w-full max-w-[680px] flex flex-col gap-7 border-t-0 border border-blue-100"
-              style={{ minWidth: 400 }}
+              className="bg-white rounded-b-2xl shadow-2xl p-6 w-full max-w-[920px] border border-blue-50"
               onSubmit={handleSubmit}
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col w-full max-w-[260px] mx-auto">
-                    <label className="text-base font-bold text-blue-900 flex items-center gap-1 mb-2">
-                      Project Name <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      className="w-full h-10 min-h-10 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-base text-blue-700 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:font-bold placeholder:text-slate-600 placeholder:text-xs shadow-sm"
-                      value={selectedProject}
-                      onChange={e => setSelectedProject(e.target.value)}
-                      onBlur={() => handleBlur('selectedProject')}
-                      disabled={loadingProjects}
-                      aria-invalid={!!errors.selectedProject}
-                    >
-                      <option value="" className="font-bold text-slate-600 text-xs">Select Project</option>
-                      {projects.map((p) => (
-                        <option key={p.project_id} value={p.project_id} className="font-normal text-slate-700 text-base">{p.project_name}</option>
-                      ))}
-                    </select>
-                    {touched.selectedProject && errors.selectedProject && (
-                      <span className="text-xs text-red-600 mt-1">{errors.selectedProject}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-col w-full max-w-[260px] mx-auto">
-                    <label className="text-base font-bold text-blue-900 flex items-center gap-1 mb-2">
-                      Task Name <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      className="w-full h-10 min-h-[40px] bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-base text-blue-700 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:font-bold placeholder:text-slate-600 placeholder:text-xs shadow-sm"
-                      value={selectedTask}
-                      onChange={e => {
-                        const value = String(e.target.value);
-                        setSelectedTask(value);
-                        log('[AgentDashboard] Task selected:', value);
-                        // Force base target calculation immediately after task selection
-                        setTimeout(() => {
-                          const project = projects.find(p => String(p.project_id) === String(selectedProject));
-                          const task = project?.tasks?.find(t => String(t.task_id) === String(value));
-                          if (task && user?.user_tenure) {
-                            setBaseTarget(Number(task.task_target) * Number(user.user_tenure));
-                          } else {
-                            setBaseTarget("");
-                          }
-                        }, 0);
-                      }}
-                      onBlur={() => handleBlur('selectedTask')}
-                      disabled={!selectedProject || loadingTasks}
-                      aria-invalid={!!errors.selectedTask}
-                    >
-                      <option value="" className="font-bold text-slate-600 text-xs">Select Task</option>
-                      {tasks.map((t) => (
-                        <option key={t.task_id} value={t.task_id} className="font-normal text-slate-700 text-base">{t.task_name || t.label}</option>
-                      ))}
-                    </select>
-                    {touched.selectedTask && errors.selectedTask && (
-                      <span className="text-xs text-red-600 mt-1">{errors.selectedTask}</span>
-                    )}
-                  </div>
+              {/* Form Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
+                {/* Project Selection */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                      <path d="M2 20h20"></path>
+                      <path d="m5 9 3-3 3 3"></path>
+                      <path d="M2 4h20"></path>
+                      <path d="m19 15-3 3-3-3"></path>
+                    </svg>
+                    Project Name
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <CustomSelect
+                    value={selectedProject}
+                    onChange={(value) => {
+                      setSelectedProject(value);
+                      handleBlur('selectedProject');
+                    }}
+                    options={[
+                      { value: '', label: 'Select a project...' },
+                      ...projects.map(p => ({ value: String(p.project_id), label: p.project_name }))
+                    ]}
+                    icon={Briefcase}
+                    placeholder="Select a project..."
+                    disabled={loadingProjects}
+                  />
+                  {touched.selectedProject && errors.selectedProject && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      {errors.selectedProject}
+                    </p>
+                  )}
                 </div>
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col w-full max-w-[260px] mx-auto">
-                    <label className="text-base font-bold text-blue-900 flex items-center gap-1 mb-2">
-                      Base Target <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-base text-blue-700 font-bold gap-2 min-h-10 h-10 shadow-sm">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-blue-400"><rect width="14" height="10" x="5" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                      <span className="text-blue-700 font-bold">{baseTargetLoading ? 'Loading...' : (baseTarget ? baseTarget : '-')}</span>
+
+                {/* Task Selection */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                      <path d="M9 11 4 6l5-5 5 5-5 5Z"></path>
+                      <path d="M13 13 8 8l5-5 5 5-5 5Z"></path>
+                      <path d="m20 16-5 5-5-5 5-5 5 5Z"></path>
+                    </svg>
+                    Task Name
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <CustomSelect
+                    value={selectedTask}
+                    onChange={(value) => {
+                      const taskValue = String(value);
+                      setSelectedTask(taskValue);
+                      handleBlur('selectedTask');
+                      log('[AgentDashboard] Task selected:', taskValue);
+                      setTimeout(() => {
+                        const project = projects.find(p => String(p.project_id) === String(selectedProject));
+                        const task = project?.tasks?.find(t => String(t.task_id) === String(taskValue));
+                        if (task && user?.user_tenure) {
+                          setBaseTarget(Number(task.task_target) * Number(user.user_tenure));
+                        } else {
+                          setBaseTarget("");
+                        }
+                      }, 0);
+                    }}
+                    options={[
+                      { value: '', label: 'Select a task...' },
+                      ...tasks.map(t => ({ value: String(t.task_id), label: t.task_name || t.label }))
+                    ]}
+                    icon={ListChecks}
+                    placeholder="Select a task..."
+                    disabled={!selectedProject || loadingTasks}
+                  />
+                  {touched.selectedTask && errors.selectedTask && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      {errors.selectedTask}
+                    </p>
+                  )}
+                </div>
+
+                {/* Base Target */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <circle cx="12" cy="12" r="6"></circle>
+                      <circle cx="12" cy="12" r="2"></circle>
+                    </svg>
+                    Base Target
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="w-full bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-300 rounded-lg px-4 py-3 text-sm font-bold text-slate-700 shadow-sm flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                        <rect width="14" height="10" x="5" y="11" rx="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                      <span>{baseTargetLoading ? 'Calculating...' : (baseTarget ? baseTarget : '—')}</span>
                     </div>
-                    {touched.baseTarget && errors.baseTarget && (
-                      <span className="text-xs text-red-600 mt-1">{errors.baseTarget}</span>
-                    )}
                   </div>
-                  <div className="flex flex-col w-full max-w-[260px] mx-auto">
-                    <label className="text-base font-bold text-blue-900 flex items-center gap-1 mb-2">
-                      Production Target <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-base text-blue-700 font-bold gap-2 min-h-10 h-10 shadow-sm">
-                      <input
-                        type="number"
-                        min="0"
-                        className="bg-transparent outline-none border-none w-full h-full text-blue-700 font-bold text-base px-0 placeholder:font-bold placeholder:text-slate-600 placeholder:text-xs"
-                        value={productionTarget}
-                        onChange={e => setProductionTarget(e.target.value)}
-                        onBlur={() => handleBlur('productionTarget')}
-                        placeholder="Enter value"
-                        style={{ minWidth: 0 }}
-                        aria-invalid={!!errors.productionTarget}
-                      />
-                    </div>
-                    {touched.productionTarget && errors.productionTarget && (
-                      <span className="text-xs text-red-600 mt-1">{errors.productionTarget}</span>
-                    )}
-                  </div>
+                  {touched.baseTarget && errors.baseTarget && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      {errors.baseTarget}
+                    </p>
+                  )}
+                </div>
+
+                {/* Production Target */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                      <line x1="12" x2="12" y1="2" y2="22"></line>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    Production
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white"
+                    value={productionTarget}
+                    onChange={e => setProductionTarget(e.target.value)}
+                    onBlur={() => handleBlur('productionTarget')}
+                    placeholder="Enter production"
+                  />
+                  {touched.productionTarget && errors.productionTarget && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      {errors.productionTarget}
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="flex justify-center mt-2 mb-2">
-                <div className="w-full max-w-xs">
-                  <label className="text-base font-bold text-blue-900 flex items-center gap-1 mb-2">Project Files</label>
-                  <div
-                    className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 min-h-10 h-10 cursor-pointer group shadow-sm"
-                    onClick={() => document.getElementById('custom-file-upload').click()}
-                    style={{ transition: 'border 0.2s' }}
-                  >
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-blue-400"><path d="M16 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><rect width="8" height="8" x="14" y="2" rx="2"/><path d="M8 12h4m-2-2v4"/></svg>
-                      <span className="font-bold select-none text-sm">{file ? file.name : 'Select project files'}</span>
+
+              {/* File Upload Section */}
+              <div className="mb-5">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                  Project Files
+                </label>
+                <div
+                  onClick={() => document.getElementById('custom-file-upload').click()}
+                  className={`relative border-2 border-dashed rounded-lg px-6 py-6 text-center transition-all cursor-pointer group ${
+                    fileError 
+                      ? 'border-red-300 bg-red-50/30 hover:border-red-400' 
+                      : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
+                  }`}
+                >
+                  <div className="flex flex-col items-center gap-3">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors ${
+                      fileError ? 'bg-red-100' : 'bg-blue-100'
+                    }`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={fileError ? 'text-red-600' : 'text-blue-600'}>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" x2="12" y1="3" y2="15"></line>
+                      </svg>
                     </div>
-                    <span className="text-blue-700 font-bold text-sm group-hover:underline select-none">Browse</span>
-                    <input
-                      id="custom-file-upload"
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">
+                        {file ? (
+                          <span className="text-blue-600">{file.name}</span>
+                        ) : (
+                          <>Click to upload <span className="text-blue-600">or drag and drop</span></>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">Max file size: 1MB</p>
+                    </div>
                   </div>
+                  <input
+                    id="custom-file-upload"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
                 </div>
+                {fileError && (
+                  <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" x2="12" y1="8" y2="12"></line>
+                      <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                    </svg>
+                    {fileError}
+                  </p>
+                )}
               </div>
-              <div className="flex gap-4 justify-center mt-6">
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-center gap-4 pt-3 border-t border-slate-200">
                 <button
                   type="submit"
-                  className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-7 py-2.5 rounded-xl font-extrabold text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow"
                   disabled={submitting}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-sm rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {submitting ? "Submitting..." : "Submit"}
+                  {submitting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Submit Entry
+                    </>
+                  )}
                 </button>
                 <button
                   type="button"
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-7 py-2.5 rounded-xl font-extrabold text-base transition-all flex items-center gap-2 shadow"
                   onClick={handleViewAll}
+                  className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2"
                 >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
                   View All Data
                 </button>
               </div>

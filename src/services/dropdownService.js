@@ -15,8 +15,10 @@ export const fetchDropdown = async (dropdownType, projectId = null) => {
           const payload = { dropdown_type: dropdownType };
           if (projectId) payload.project_id = projectId;
           const response = await api.post("/dropdown/get", payload);
+          const data = response.data?.data || [];
+          console.log(`[dropdownService] Fetched ${dropdownType}:`, data);
           // Returns the data array or an empty array as a fallback
-          return response.data?.data || [];
+          return data;
      } catch (error) {
           console.error(`❌ Error fetching ${dropdownType}:`, error.response?.data || error.message);
           return [];

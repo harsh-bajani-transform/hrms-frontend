@@ -16,7 +16,66 @@ export const loginUser = async (username, password, deviceId, deviceType) => {
     return response;
   } catch (error) {
     logError('[authService] Login failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Login failed. Please check your credentials.');
+    // Re-throw the original error to preserve response structure
+    throw error;
+  }
+};
+
+// Forgot Password - Send reset link to email
+export const forgotPassword = async (email, deviceId, deviceType) => {
+  try {
+    const payload = {
+      user_email: email,
+      device_id: deviceId,
+      device_type: deviceType
+    };
+    log('[authService] Requesting password reset for:', email);
+    
+    const response = await api.post("/password_reset/forgot-password", payload);
+    log('[authService] Password reset request sent');
+    return response.data;
+  } catch (error) {
+    logError('[authService] Forgot password failed:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Verify Reset Token
+export const verifyResetToken = async (token, deviceId, deviceType) => {
+  try {
+    const payload = {
+      token: token,
+      device_id: deviceId,
+      device_type: deviceType
+    };
+    log('[authService] Verifying reset token');
+    
+    const response = await api.post("/password_reset/verify-reset-token", payload);
+    log('[authService] Token verified successfully');
+    return response.data;
+  } catch (error) {
+    logError('[authService] Token verification failed:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Reset Password
+export const resetPassword = async (token, newPassword, deviceId, deviceType) => {
+  try {
+    const payload = {
+      token: token,
+      device_id: deviceId,
+      device_type: deviceType,
+      new_password: newPassword
+    };
+    log('[authService] Resetting password');
+    
+    const response = await api.post("/password_reset/reset-password", payload);
+    log('[authService] Password reset successful');
+    return response.data;
+  } catch (error) {
+    logError('[authService] Password reset failed:', error.response?.data || error.message);
+    throw error;
   }
 };
 
@@ -24,7 +83,12 @@ export const loginUser = async (username, password, deviceId, deviceType) => {
 export const addUser = async (userData) => {
   try {
     log('[authService] Creating new user');
-    const response = await api.post("/auth/user", userData);
+    // When sending FormData, let the browser set the Content-Type header with boundary
+    const response = await api.post("/auth/user", userData, {
+      headers: {
+        'Content-Type': undefined // This allows browser to set multipart/form-data with boundary
+      }
+    });
     log('[authService] User created successfully');
     return response.data;
   } catch (error) {
@@ -64,8 +128,26 @@ export const fetchUsersList = async (userId, deviceId, deviceType) => {
 
 export const updateUser = async (userData) => {
   try {
+    // Check if userData is FormData
+    if (userData instanceof FormData) {
+      log('[authService] Sending FormData for user update');
+      const userId = userData.get('user_id');
+      log('[authService] Updating user (FormData):', userId);
+      
+      // Log all FormData entries for debugging
+      for (let pair of userData.entries()) {
+        log(`[authService] FormData entry: ${pair[0]} = ${pair[1]}`);
+      }
+      
+      // api.js interceptor will handle removing Content-Type for FormData
+      const response = await api.post('/user/update_user', userData);
+      log('[authService] User updated successfully');
+      return response.data;
+    }
+    
+    // Regular JSON payload
     log('[authService] Updating user:', userData.user_id);
-    const response = await api.put('/user/update_user', userData);
+    const response = await api.post('/user/update_user', userData);
     log('[authService] User updated successfully');
     return response.data;
   } catch (error) {

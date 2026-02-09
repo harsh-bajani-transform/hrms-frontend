@@ -10,9 +10,10 @@
  * - Provides login and logout functionality
  * - Exposes role-based and permission-based helpers
  * - Makes auth data available to all components
+ * - Implements cross-tab login detection (only one active session per browser)
  */
 
-import { createContext, useState, useContext, useMemo } from "react";
+import { createContext, useState, useContext, useMemo, useEffect } from "react";
 
 // Create Auth Context
 const AuthContext = createContext();
@@ -38,20 +39,108 @@ export const AuthProvider = ({ children }) => {
     return null;
   });
 
+  // Cross-tab login detection using localStorage as communication channel
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      // When a new login happens in another tab
+      if (e.key === 'new_login_trigger' && e.newValue) {
+        try {
+          const newLoginData = JSON.parse(e.newValue);
+          const currentSessionId = sessionStorage.getItem('session_id');
+          const currentUserId = user?.user_id;
+          
+          // Logout this tab if EITHER:
+          // 1. Same user but different session (multiple tabs with same user)
+          // 2. Different user (switching users)
+          const isDifferentSession = currentSessionId && newLoginData.session_id !== currentSessionId;
+          const isDifferentUser = currentUserId && newLoginData.user_id !== currentUserId;
+          
+          if (isDifferentSession || isDifferentUser) {
+            console.log('[Auth] New login detected in another tab:', {
+              reason: isDifferentUser ? 'Different user' : 'Different session',
+              currentUser: currentUserId,
+              newUser: newLoginData.user_id
+            });
+            
+            // Clear session data
+            setUser(null);
+            sessionStorage.removeItem("user");
+            sessionStorage.removeItem("session_id");
+            sessionStorage.removeItem("token");
+            
+            // Show appropriate message
+            const message = isDifferentUser 
+              ? `You have been logged out because another user (User ID: ${newLoginData.user_id}) logged in.`
+              : 'You have been logged out because a new login was detected in another tab.';
+            
+            alert(message);
+            window.location.href = '/login';
+          }
+        } catch (error) {
+          console.error('[Auth] Error handling new login trigger:', error);
+        }
+      }
+
+      // When logout happens in another tab
+      if (e.key === 'logout_trigger' && e.newValue) {
+        console.log('[Auth] Logout detected in another tab');
+        setUser(null);
+        sessionStorage.removeItem("user");
+        sessionStorage.removeItem("session_id");
+        sessionStorage.removeItem("token");
+        window.location.href = '/login';
+      }
+    };
+
+    // Listen for storage events (only fires in OTHER tabs)
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [user?.user_id]);
+
   // Login: save user data in state and sessionStorage, normalize user_id
   const login = (userData) => {
     let normalized = { ...userData };
     if (!normalized.user_id && normalized.id) {
       normalized.user_id = normalized.id;
     }
+    
+    // Generate unique session ID for this tab
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     setUser(normalized);
     sessionStorage.setItem("user", JSON.stringify(normalized));
+    sessionStorage.setItem("session_id", sessionId);
+    
+    // Trigger cross-tab notification using localStorage
+    // Include BOTH session_id AND user_id for proper detection
+    localStorage.setItem('new_login_trigger', JSON.stringify({
+      session_id: sessionId,
+      user_id: normalized.user_id,
+      email: normalized.email,
+      timestamp: Date.now()
+    }));
+    
+    // Clean up the trigger immediately (it's just for event notification)
+    setTimeout(() => {
+      localStorage.removeItem('new_login_trigger');
+    }, 100);
   };
 
   // Logout: clear user state and sessionStorage
   const logout = () => {
     setUser(null);
     sessionStorage.removeItem("user");
+    sessionStorage.removeItem("session_id");
+    sessionStorage.removeItem("token");
+    
+    // Trigger cross-tab logout notification
+    localStorage.setItem('logout_trigger', Date.now().toString());
+    setTimeout(() => {
+      localStorage.removeItem('logout_trigger');
+    }, 100);
   };
 
   // Generic permission checker (1 = allowed, 0 = denied)

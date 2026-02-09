@@ -42,15 +42,30 @@ export async function fetchUserById(userId, deviceId, deviceType) {
   }
 }
 
-// Update user (PUT)
+// Update user (POST with FormData support)
 export async function updateUser(payload) {
   try {
-    log('[userService] Updating user:', payload.user_id);
+    log('[userService] Updating user:', payload.user_id || payload.get?.('user_id'));
+    
+    // Check if payload is FormData
+    if (payload instanceof FormData) {
+      log('[userService] Sending FormData for user update');
+      const res = await api.post("user/update_user", payload, {
+        headers: {
+          'Content-Type': undefined // Let browser set multipart/form-data with boundary
+        }
+      });
+      log('[userService] User updated successfully');
+      log('[userService] Backend response:', res.data);
+      return res.data;
+    }
+    
+    // Regular JSON payload
     log('[userService] Full payload being sent:', JSON.stringify(payload, null, 2));
     log('[userService] Designation ID in payload:', payload.designation_id);
     log('[userService] Payload keys:', Object.keys(payload));
     
-    const res = await api.put("user/update_user", payload);
+    const res = await api.post("user/update_user", payload);
     
     log('[userService] User updated successfully');
     log('[userService] Backend response:', res.data);

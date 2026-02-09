@@ -22,6 +22,11 @@ export const useUserDropdowns = () => {
           try {
                const data = await fetchUserDropdowns();
 
+               console.log('[useUserDropdowns] Raw data received:', data);
+               console.log('[useUserDropdowns] projectManagers:', data.projectManagers);
+               console.log('[useUserDropdowns] assistantManagers:', data.assistantManagers);
+               console.log('[useUserDropdowns] qas:', data.qas);
+               console.log('[useUserDropdowns] agents:', data.agents);
 
                // ✅ VALIDATION GUARD
                const isValid =

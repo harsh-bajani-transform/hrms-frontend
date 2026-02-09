@@ -292,20 +292,21 @@ const Header = ({
         />
       )}
 
-      <nav className="bg-white border-b border-slate-100 sticky top-0 z-50">
-        <div className="max-w-7xl ml-auto mr-16 px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* LOGO + TITLE */}
-            <div className="flex items-center gap-2">
+      <nav className="bg-white border-b border-slate-100 sticky top-0 z-50 left-0 right-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* LEFT: LOGO */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               <img src={logo} alt="TFS Ops Tracker Logo" className="h-10 w-auto" />
             </div>
 
-            {/* NAVIGATION + USER INFO + LOGOUT */}
-            <div className="flex flex-1 items-center justify-end space-x-6">
+            {/* RIGHT: NAVIGATION + USER INFO + LOGOUT */}
+            <div className="flex items-center gap-6">
               <div className="hidden lg:flex items-center space-x-2">
                 {navItems.map(renderNavButton)}
               </div>
-              <div className="flex items-center gap-2 border-l border-slate-200 pl-4 min-w-[180px]">
+              
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-4 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center text-lg font-bold text-white">
                     {getInitials()}

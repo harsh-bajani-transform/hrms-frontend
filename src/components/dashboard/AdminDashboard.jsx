@@ -12,7 +12,7 @@ import BillableReport from "../common/BillableReport";
 import QATrackerReport from './QATrackerReport';
 import QAAgentList from './QAAgentList';
 
-const AssistantManagerDashboard = () => {
+const AdminDashboard = () => {
   // StatCard component for dashboard stats
   const StatCard = ({ title, value, subtext, icon: Icon, trend = 'neutral', alert, className = '' }) => (
     <div
@@ -95,7 +95,7 @@ const AssistantManagerDashboard = () => {
   }, [user?.user_id]);
   const { device_id, device_type } = useDeviceInfo();
   
-  // Set default date range to today's date (matches QA Agent behavior)
+  // Set default date range to today's date
   const todayStr = new Date().toISOString().slice(0, 10);
   const [dateRange, setDateRange] = useState({
     start: todayStr,
@@ -103,42 +103,43 @@ const AssistantManagerDashboard = () => {
   });
   const [stats, setStats] = useState({
     totalAgents: 0,
+    totalProjects: 0,
     qcPending: 0,
     billableHours: 0,
     avgQcScore: 0,
     latestQc: [],
   });
-  const [loading, setLoading] = useState(false); // Restored loading state for async fetch
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch dashboard data
+  // Fetch dashboard data - Admin sees all data (no user_id filter in API)
   useEffect(() => {
     const fetchDashboard = async () => {
       setLoading(true);
       try {
-        // If no filter applied, show today's data only (but do not set date in filter UI)
         let payload = {
           logged_in_user_id: user?.user_id || user?.id,
           device_id,
           device_type,
         };
-        // Do NOT send user_id in the payload, only logged_in_user_id
-        // (If user_id is present elsewhere, ensure it's not included)
-        // If user applies a date filter, use it; otherwise, send today's date in API only
+        
+        // Apply date filter if selected
         if (dateRange.start && dateRange.end) {
           payload.date_from = dateRange.start;
           payload.date_to = dateRange.end;
         } else if (!dateRange.start && !dateRange.end) {
-          // Default: show today's data only
-          const today = format(new Date(), 'yyyy-MM-dd'); // No time displayed here, so nothing to change
+          // Default: show today's data
+          const today = format(new Date(), 'yyyy-MM-dd');
           payload.date_from = today;
           payload.date_to = today;
         }
+        
         const res = await api.post('/dashboard/filter', payload);
         if (res.data && res.data.status === 200) {
           const data = res.data.data || {};
-          console.log('[AssistantManagerDashboard] Dashboard API data:', data);
-          // Only show trackers with files, sorted by date_time desc, limit 5
+          console.log('[AdminDashboard] Dashboard API data:', data);
+          
+          // Latest QC files (with files only)
           const latestQc = (data.tracker || [])
             .filter(row => !!row.tracker_file)
             .sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
@@ -152,15 +153,20 @@ const AssistantManagerDashboard = () => {
               date: row.date_time ? row.date_time.split(' ')[0] : '-',
               task_name: taskNameMap[String(row.task_id)] || row.task_name || String(row.task_id) || '-',
             }));
+          
+          // Get unique project count from tracker data
+          const uniqueProjects = new Set((data.tracker || []).map(t => t.project_id).filter(Boolean));
+          
           setStats({
             totalAgents: (data.users || []).length,
+            totalProjects: uniqueProjects.size,
             qcPending: (data.tracker || []).filter(row => row.tracker_file && row.qc_status === 'pending').length,
             billableHours: (data.summary?.total_billable_hours || 0).toFixed(2),
             avgQcScore: '-', // Not provided in response
             latestQc,
           });
         } else {
-          setStats({ totalAgents: 0, qcPending: 0, billableHours: 0, avgQcScore: 0, latestQc: [] });
+          setStats({ totalAgents: 0, totalProjects: 0, qcPending: 0, billableHours: 0, avgQcScore: 0, latestQc: [] });
         }
       } catch (err) {
         setError(getFriendlyErrorMessage(err));
@@ -170,10 +176,6 @@ const AssistantManagerDashboard = () => {
     };
     fetchDashboard();
   }, [user, dateRange, device_id, device_type, projectNameMap, taskNameMap]);
-
-  // const handleDateChange = (field, value) => {
-  //   setDateRange((prev) => ({ ...prev, [field]: value }));
-  // };
 
   // Handler for date change
   const handleDateRangeChange = (field, value) => {
@@ -260,23 +262,24 @@ const AssistantManagerDashboard = () => {
               <StatCard
                 icon={Users}
                 title="Total Agents"
-                value={stats.totalAgents}
-                subtext="Assigned agents"
+                value={loading ? "..." : stats.totalAgents}
+                subtext="Active team members"
                 trend="neutral"
                 className="h-32 flex flex-col justify-center"
               />
               {/* <StatCard
-                icon={FileText}
+                icon={CheckCircle2}
                 title="Pending QC Files"
-                value={stats.qcPending}
+                value={loading ? "..." : stats.qcPending}
                 subtext="Files to review"
                 trend="neutral"
+                alert={stats.qcPending > 0}
                 className="h-32 flex flex-col justify-center"
               /> */}
               <StatCard
                 icon={Clock}
                 title="Total Billable Hours"
-                value={Number(stats.billableHours).toFixed(2)}
+                value={loading ? "..." : Number(stats.billableHours).toFixed(2)}
                 subtext="Billable hours"
                 trend="up"
                 className="h-32 flex flex-col justify-center"
@@ -445,4 +448,4 @@ const AssistantManagerDashboard = () => {
   );
 };
 
-export default AssistantManagerDashboard;
+export default AdminDashboard;

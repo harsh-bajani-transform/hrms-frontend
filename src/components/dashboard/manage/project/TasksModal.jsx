@@ -88,6 +88,22 @@ const TasksModal = ({
     }
   };
 
+  const handleSelectAllTeams = (isChecked) => {
+    if (isChecked) {
+      // Select all agents
+      const allAgentIds = agents.map(agent => agent.id);
+      setFormData((prev) => ({ ...prev, teamIds: allAgentIds }));
+    } else {
+      // Deselect all agents
+      setFormData((prev) => ({ ...prev, teamIds: [] }));
+    }
+    
+    // Clear error when user makes a selection
+    if (isChecked && formErrors.teamIds) {
+      setFormErrors((prev) => ({ ...prev, teamIds: '' }));
+    }
+  };
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
@@ -283,17 +299,31 @@ const TasksModal = ({
                             {agentsError || 'No agents available'}
                           </div>
                         )}
-                        {!agentsLoading && agents.map((agent) => (
-                          <label key={agent.id} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm">
-                            <input
-                              type="checkbox"
-                              className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-                              checked={formData.teamIds.includes(agent.id)}
-                              onChange={() => toggleTeamSelection(agent.id)}
-                            />
-                            <span className="text-slate-700">{agent.label || 'Unnamed agent'}</span>
-                          </label>
-                        ))}
+                        {!agentsLoading && agents.length > 0 && (
+                          <>
+                            {/* Select All Option */}
+                            <label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
+                                checked={agents.length > 0 && formData.teamIds.length === agents.length}
+                                onChange={(e) => handleSelectAllTeams(e.target.checked)}
+                              />
+                              <span className="font-semibold text-slate-900">Select All</span>
+                            </label>
+                            {agents.map((agent) => (
+                              <label key={agent.id} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
+                                  checked={formData.teamIds.includes(agent.id)}
+                                  onChange={() => toggleTeamSelection(agent.id)}
+                                />
+                                <span className="text-slate-700">{agent.label || 'Unnamed agent'}</span>
+                              </label>
+                            ))}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

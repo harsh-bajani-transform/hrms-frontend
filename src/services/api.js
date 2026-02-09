@@ -18,6 +18,12 @@ api.interceptors.request.use(
       requestConfig.headers.Authorization = `Bearer ${token}`;
     }
     
+    // If the request data is FormData, remove Content-Type to let browser set it with boundary
+    if (requestConfig.data instanceof FormData) {
+      delete requestConfig.headers['Content-Type'];
+      log('[API Request] Detected FormData, removed Content-Type header');
+    }
+    
     log(`[API Request] ${requestConfig.method?.toUpperCase()} ${requestConfig.url}`);
     
     return requestConfig;
@@ -38,11 +44,17 @@ api.interceptors.response.use(
     logError('[API Response Error]', error.response?.status, error.message);
 
     // Handle 401 unauthorized - token expired or invalid
-    if (error.response?.status === 401) {
+    // BUT: Don't redirect if we're on the login page or calling the auth endpoint
+    const isAuthEndpoint = error.config?.url?.includes('/auth/');
+    const isLoginPage = window.location.pathname === '/login' || window.location.pathname === '/';
+    
+    if (error.response?.status === 401 && !isAuthEndpoint && !isLoginPage) {
+      console.log('[API] 401 detected, redirecting to login');
       localStorage.removeItem(config.tokenKey);
       localStorage.removeItem(config.userKey);
       sessionStorage.clear();
       window.location.href = '/login';
+      return Promise.reject(error);
     }
 
     // Handle 403 forbidden - insufficient permissions
