@@ -126,6 +126,49 @@ export default function MonthCard({ month, users, onExport, onExportMonth, teamO
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-blue-300 bg-blue-50/70">
+                    <td className="px-4 py-3 text-slate-900 font-bold">TOTAL</td>
+                    {!hideTeamColumn && <td className="px-4 py-3"></td>}
+                    <td className="px-4 py-3 text-center text-slate-900 font-bold">
+                      {(() => {
+                        const total = filteredUsers.reduce((sum, user) => {
+                          const val = Number(user.total_billable_hours);
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0);
+                        return total.toFixed(2);
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-slate-900 font-bold">
+                      {(() => {
+                        const total = filteredUsers.reduce((sum, user) => {
+                          const val = Number(user.monthly_total_target);
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0);
+                        return total.toFixed(2);
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-slate-900 font-bold">
+                      {(() => {
+                        const total = filteredUsers.reduce((sum, user) => {
+                          const val = Number(user.pending_target);
+                          return sum + (isNaN(val) ? 0 : val);
+                        }, 0);
+                        return total.toFixed(2);
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-slate-900 font-bold">
+                      {(() => {
+                        const scores = filteredUsers
+                          .map(user => Number(user.avg_qc_score))
+                          .filter(val => !isNaN(val) && val !== null);
+                        if (scores.length === 0) return '-';
+                        const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+                        return avg.toFixed(2);
+                      })()}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             )}
           </div>

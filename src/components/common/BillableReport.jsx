@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import * as XLSX from 'xlsx';
 import { toast } from "react-hot-toast";
 import React, { useState, useEffect } from "react";
@@ -25,6 +26,24 @@ const BillableReport = ({ userId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showMonthlyMonthPicker, setShowMonthlyMonthPicker] = useState(false);
+
+  // Refs for pickers
+  const monthPickerRef = useRef(null);
+  const monthlyMonthPickerRef = useRef(null);
+
+  // Close pickers on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (showMonthPicker && monthPickerRef.current && !monthPickerRef.current.contains(event.target)) {
+        setShowMonthPicker(false);
+      }
+      if (showMonthlyMonthPicker && monthlyMonthPickerRef.current && !monthlyMonthPickerRef.current.contains(event.target)) {
+        setShowMonthlyMonthPicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMonthPicker, showMonthlyMonthPicker]);
   const { user } = useAuth();
 
   // Check if user is Assistant Manager
@@ -77,6 +96,7 @@ const BillableReport = ({ userId }) => {
         rowData['Assign Hours'] = formatNumber(row.assigned_hours);
         rowData['Worked Hours'] = formatNumber(row.total_billable_hours_day);
         rowData['QC Score'] = formatNumber(row.qc_score);
+        rowData['Tracker Count'] = row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-';
         rowData['Daily Required Hours'] = formatNumber(row.daily_required_hours);
         
         return rowData;
@@ -89,6 +109,10 @@ const BillableReport = ({ userId }) => {
         const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
         const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
         const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+        const totalTrackers = exportData.reduce((sum, r) => {
+          const count = r['Tracker Count'];
+          return sum + (count !== '-' ? parseInt(count) : 0);
+        }, 0);
         
         const totalRow = {
           'User Name': 'TOTAL'
@@ -98,6 +122,7 @@ const BillableReport = ({ userId }) => {
         totalRow['Assign Hours'] = totalAssigned.toFixed(2);
         totalRow['Worked Hours'] = totalWorked.toFixed(2);
         totalRow['QC Score'] = avgQC;
+        totalRow['Tracker Count'] = totalTrackers;
         totalRow['Daily Required Hours'] = totalRequired.toFixed(2);
         
         exportData.push(totalRow);
@@ -110,6 +135,7 @@ const BillableReport = ({ userId }) => {
         { wch: 16 }, // Assign Hours
         { wch: 18 }, // Worked Hours
         { wch: 12 }, // QC Score
+        { wch: 15 }, // Tracker Count
         { wch: 22 }  // Daily Required Hours
       ];
       
@@ -433,6 +459,7 @@ const BillableReport = ({ userId }) => {
           'Assigned Hour': formatNum(row.assigned_hours ?? row.assign_hours),
           'Worked Hours': formatNum(row.total_billable_hours_day ?? row.billable_hours),
           'QC Score': formatNum(row.qc_score),
+          'Tracker Count': row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-',
           'Daily Required Hours': formatNum(row.daily_required_hours ?? row.tenure_target)
         };
       });
@@ -444,12 +471,17 @@ const BillableReport = ({ userId }) => {
         // For QC Score, calculate average instead of sum
         const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
         const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+        const totalTrackers = exportData.reduce((sum, r) => {
+          const count = r['Tracker Count'];
+          return sum + (count !== '-' ? parseInt(count) : 0);
+        }, 0);
         
         exportData.push({
           'Date-Time': 'TOTAL',
           'Assigned Hour': totalAssigned.toFixed(2),
           'Worked Hours': totalWorked.toFixed(2),
           'QC Score': avgQC,
+          'Tracker Count': totalTrackers,
           'Daily Required Hours': totalRequired.toFixed(2)
         });
       }
@@ -459,6 +491,7 @@ const BillableReport = ({ userId }) => {
         { wch: 16 }, // Assigned Hour
         { wch: 16 }, // Worked Hours
         { wch: 12 }, // QC Score
+        { wch: 15 }, // Tracker Count
         { wch: 20 }, // Daily Required Hours
       ];
       const workbook = XLSX.utils.book_new();
@@ -529,6 +562,8 @@ const BillableReport = ({ userId }) => {
 
   // Custom Month Picker Component
   const CustomMonthPicker = ({ value, onChange, show, onClose }) => {
+    // Use correct ref for daily/monthly picker
+    const ref = onChange === setDailyMonth ? monthPickerRef : monthlyMonthPickerRef;
     const [viewYear, setViewYear] = useState(() => {
       if (value) {
         const [year] = value.split('-');
@@ -555,7 +590,7 @@ const BillableReport = ({ userId }) => {
     const [selectedYear, selectedMonth] = value ? value.split('-').map(Number) : [null, null];
 
     return (
-      <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-4 w-72">
+      <div ref={ref} className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-4 w-72">
         {/* Year Header */}
         <div className="flex items-center justify-between mb-4">
           <button onClick={handlePrevYear} className="p-1.5 hover:bg-slate-100 rounded transition">
@@ -592,10 +627,14 @@ const BillableReport = ({ userId }) => {
 
         {/* Close Button */}
         <button 
+          type="button"
           onClick={onClose}
-          className="w-full text-sm text-slate-600 hover:text-slate-800 font-semibold py-2 hover:bg-slate-50 rounded transition"
+          className="w-full px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
         >
-          Close
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Return
         </button>
       </div>
     );
@@ -764,6 +803,8 @@ const BillableReport = ({ userId }) => {
                       let assigned_hours = r.assigned_hours !== null && r.assigned_hours !== undefined ? r.assigned_hours : null;
                       // Get qc_score from API response
                       let qc_score = r.qc_score !== null && r.qc_score !== undefined ? r.qc_score : null;
+                      // Get trackers_count_day from API response
+                      let trackers_count_day = r.trackers_count_day !== null && r.trackers_count_day !== undefined ? r.trackers_count_day : null;
                       
                       return {
                         date,
@@ -778,6 +819,7 @@ const BillableReport = ({ userId }) => {
                         total_billable_hours_day: r.total_billable_hours_day, // Keep original field
                         qc_score, // Use actual value from API
                         qcScore: qc_score, // Alternative field name
+                        trackers_count_day, // Tracker count from API
                         daily_required_hours,
                         dailyRequiredHours: daily_required_hours, // Alternative field name
                         tenure_target: r.daily_required_hours, // Alternative field name
