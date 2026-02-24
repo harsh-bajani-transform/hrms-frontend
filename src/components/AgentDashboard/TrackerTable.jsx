@@ -4,13 +4,14 @@
  * Description: Displays all tracker entries in a table, resolves project/task names, supports file download and delete actions.
  */
 import React, { useEffect, useState, useMemo } from "react";
-import { format } from "date-fns";
-import { Download, Trash2, Filter, FileDown, RotateCcw, RefreshCw } from "lucide-react";
+import { Download, Trash2, Filter, FileDown, RotateCcw, RefreshCw, FolderOpen, ClipboardList, Info } from "lucide-react";
 import { toast } from "react-hot-toast";
 import * as XLSX from 'xlsx';
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { log, logError } from "../../config/environment";
+import { DateRangePicker } from '../common/CustomCalendar';
+import SearchableSelect from '../common/SearchableSelect';
 
 // Helper to get today's date in YYYY-MM-DD format
 const getTodayDate = () => {
@@ -31,14 +32,6 @@ const TrackerTable = ({ userId, projects, onClose }) => {
   const [selectedTask, setSelectedTask] = useState("");
   const [startDate, setStartDate] = useState(getTodayDate()); // Default to today
   const [endDate, setEndDate] = useState(getTodayDate()); // Default to today
-
-  // Custom calendar picker states
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-
-  // Custom dropdown states
-  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
-  const [showTaskDropdown, setShowTaskDropdown] = useState(false);
 
 
   // Get tasks for selected project
@@ -154,18 +147,6 @@ const TrackerTable = ({ userId, projects, onClose }) => {
     }
   }, [trackers, user]);
 
-  // Convert yyyy-mm-dd to dd/mm/yyyy for display
-  const formatToDisplay = (dateStr) => {
-    if (!dateStr) return '';
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
-  // Convert dd/mm/yyyy to yyyy-mm-dd for storage
-  const formatToStorage = (day, month, year) => {
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
   // Format date and time to display format: Returns object with date and time separate
   const formatDateTime = (dateTimeStr) => {
     if (!dateTimeStr) return { date: '-', time: '' };
@@ -201,160 +182,6 @@ const TrackerTable = ({ userId, projects, onClose }) => {
     } catch (error) {
       return { date: dateTimeStr, time: '' };
     }
-  };
-
-  // Handle date selection from custom calendar
-  const handleDateSelect = (name, dateValue) => {
-    if (name === 'start') {
-      setStartDate(dateValue);
-      setShowStartPicker(false);
-    } else if (name === 'end') {
-      setEndDate(dateValue);
-      setShowEndPicker(false);
-    }
-  };
-
-  // Generate calendar days
-  const generateCalendar = (currentDate) => {
-    const date = currentDate ? new Date(currentDate) : new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    return { year, month, daysInMonth, startingDayOfWeek };
-  };
-
-  const CustomDatePicker = ({ name, value, onSelect, show, onClose }) => {
-    const [viewDate, setViewDate] = useState(value || new Date().toISOString().split('T')[0]);
-    const { year, month, daysInMonth, startingDayOfWeek } = generateCalendar(viewDate);
-    
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-    const handlePrevMonth = () => {
-      const newDate = new Date(year, month - 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    const handleNextMonth = () => {
-      const newDate = new Date(year, month + 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    if (!show) return null;
-
-    return (
-      <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64">
-        {/* Month/Year Header */}
-        <div className="flex items-center justify-between mb-3">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="font-bold text-sm text-slate-800">{monthNames[month]} {year}</span>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map(day => (
-            <div key={day} className="text-center text-xs font-bold text-slate-600">{day}</div>
-          ))}
-        </div>
-
-        {/* Calendar Days */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = formatToStorage(day, month + 1, year);
-            const isSelected = dateStr === value;
-            return (
-              <button
-                key={day}
-                onClick={() => onSelect(name, dateStr)}
-                className={`text-xs p-1.5 rounded hover:bg-blue-100 transition-colors ${
-                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
-                }`}
-              >
-                {day}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Close Button */}
-        <button 
-          onClick={onClose}
-          className="w-full mt-3 text-xs text-slate-600 hover:text-slate-800 font-semibold"
-        >
-          Close
-        </button>
-      </div>
-    );
-  };
-
-  // Custom Dropdown Component
-  const CustomDropdown = ({ options, value, onChange, placeholder, show, onClose, disabled }) => {
-    if (!show || disabled) return null;
-
-    const selectedOption = options.find(opt => String(opt.value) === String(value));
-
-    return (
-      <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 max-h-60 overflow-y-auto">
-        {/* All option */}
-        <div
-          onClick={() => {
-            onChange('');
-            onClose();
-          }}
-          className={`px-4 py-2.5 cursor-pointer transition-all border-b border-slate-100 ${
-            !value ? 'bg-blue-50 text-blue-700 font-semibold' : 'hover:bg-blue-50 text-slate-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {!value && (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            )}
-            <span className="text-sm">{placeholder}</span>
-          </div>
-        </div>
-        
-        {/* Options */}
-        {options.map((option) => (
-          <div
-            key={option.value}
-            onClick={() => {
-              onChange(option.value);
-              onClose();
-            }}
-            className={`px-4 py-2.5 cursor-pointer transition-all ${
-              String(value) === String(option.value)
-                ? 'bg-blue-50 text-blue-700 font-semibold'
-                : 'hover:bg-blue-50 text-slate-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {String(value) === String(option.value) && (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              )}
-              <span className="text-sm">{option.label}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
   };
 
   const handleDelete = (tracker_id) => setDeleteConfirm(tracker_id);
@@ -560,7 +387,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 py-6 px-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-slate-200">
           <div className="flex items-center justify-between">
@@ -599,174 +426,50 @@ const TrackerTable = ({ userId, projects, onClose }) => {
         {/* Filter Section */}
         <div className="bg-white rounded-2xl shadow-lg p-3 mb-6 border border-slate-200">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Start Date */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <path d="M8 2v4"></path>
-                  <path d="M16 2v4"></path>
-                  <rect width="18" height="18" x="3" y="4" rx="2"></rect>
-                  <path d="M3 10h18"></path>
-                </svg>
-                Start Date
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formatToDisplay(startDate)}
-                  readOnly
-                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all"
-                  placeholder="dd/mm/yyyy"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowStartPicker(!showStartPicker)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                    <path d="M8 2v4"></path>
-                    <path d="M16 2v4"></path>
-                    <rect width="18" height="18" x="3" y="4" rx="2"></rect>
-                    <path d="M3 10h18"></path>
-                  </svg>
-                </button>
-                <CustomDatePicker 
-                  name="start"
-                  value={startDate}
-                  onSelect={handleDateSelect}
-                  show={showStartPicker}
-                  onClose={() => setShowStartPicker(false)}
-                />
-              </div>
-            </div>
-
-            {/* End Date */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <path d="M8 2v4"></path>
-                  <path d="M16 2v4"></path>
-                  <rect width="18" height="18" x="3" y="4" rx="2"></rect>
-                  <path d="M3 10h18"></path>
-                </svg>
-                End Date
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formatToDisplay(endDate)}
-                  readOnly
-                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all"
-                  placeholder="dd/mm/yyyy"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowEndPicker(!showEndPicker)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                    <path d="M8 2v4"></path>
-                    <path d="M16 2v4"></path>
-                    <rect width="18" height="18" x="3" y="4" rx="2"></rect>
-                    <path d="M3 10h18"></path>
-                  </svg>
-                </button>
-                <CustomDatePicker 
-                  name="end"
-                  value={endDate}
-                  onSelect={handleDateSelect}
-                  show={showEndPicker}
-                  onClose={() => setShowEndPicker(false)}
-                />
-              </div>
+            {/* Date Range Picker */}
+            <div className="lg:col-span-2">
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                noWrapper={true}
+                showClearButton={false}
+              />
             </div>
 
             {/* Project Dropdown */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
-                </svg>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-1.5">
+                <FolderOpen className="w-3 h-3 text-blue-600" />
                 Project
               </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowProjectDropdown(!showProjectDropdown)}
-                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all text-left hover:border-blue-400"
-                >
-                  <span className={selectedProject ? 'text-slate-700' : 'text-slate-500'}>
-                    {selectedProject 
-                      ? projects.find(p => String(p.project_id) === String(selectedProject))?.project_name || 'All Projects'
-                      : 'All Projects'
-                    }
-                  </span>
-                </button>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-blue-600 transition-transform ${showProjectDropdown ? 'rotate-180' : ''}`}>
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
-                <CustomDropdown
-                  options={projects.map(p => ({ value: p.project_id, label: p.project_name }))}
-                  value={selectedProject}
-                  onChange={(val) => {
-                    setSelectedProject(val);
-                    setSelectedTask('');
-                    setShowTaskDropdown(false);
-                  }}
-                  placeholder="All Projects"
-                  show={showProjectDropdown}
-                  onClose={() => setShowProjectDropdown(false)}
-                  disabled={false}
-                />
-              </div>
+              <SearchableSelect
+                icon={FolderOpen}
+                value={selectedProject}
+                onChange={(val) => {
+                  setSelectedProject(val);
+                  setSelectedTask('');
+                }}
+                options={projects.map(p => ({ value: p.project_id, label: p.project_name }))}
+                placeholder="All Projects"
+              />
             </div>
 
             {/* Task Dropdown */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-                  <rect width="8" height="4" x="8" y="3" rx="1"/>
-                  <path d="M9 12h6"/>
-                  <path d="M9 16h6"/>
-                </svg>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-1.5">
+                <ClipboardList className="w-3 h-3 text-blue-600" />
                 Task
               </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => !selectedProject ? null : setShowTaskDropdown(!showTaskDropdown)}
-                  disabled={!selectedProject}
-                  className={`w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all text-left ${
-                    !selectedProject 
-                      ? 'opacity-60 cursor-not-allowed bg-slate-100' 
-                      : 'hover:border-blue-400'
-                  }`}
-                >
-                  <span className={selectedTask ? 'text-slate-700' : 'text-slate-500'}>
-                    {selectedTask 
-                      ? availableTasks.find(t => String(t.task_id) === String(selectedTask))?.label || 'All Tasks'
-                      : 'All Tasks'
-                    }
-                  </span>
-                </button>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-blue-600 transition-transform ${showTaskDropdown ? 'rotate-180' : ''}`}>
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
-                <CustomDropdown
-                  options={availableTasks.map(t => ({ value: t.task_id, label: t.label }))}
-                  value={selectedTask}
-                  onChange={(val) => setSelectedTask(val)}
-                  placeholder="All Tasks"
-                  show={showTaskDropdown}
-                  onClose={() => setShowTaskDropdown(false)}
-                  disabled={!selectedProject}
-                />
-              </div>
+              <SearchableSelect
+                icon={ClipboardList}
+                value={selectedTask}
+                onChange={setSelectedTask}
+                options={availableTasks.map(t => ({ value: t.task_id, label: t.label }))}
+                placeholder="All Tasks"
+                disabled={!selectedProject}
+              />
             </div>
           </div>
           {/* Filter Action Buttons */}
@@ -809,7 +512,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
           <div className="overflow-x-auto">
             <div className="max-h-[600px] overflow-y-auto">
               <table className="min-w-full text-sm text-slate-700 table-fixed">
-                <colgroup><col style={{ width: '16%' }}/><col style={{ width: '16%' }}/><col style={{ width: '16%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '9%' }}/><col style={{ width: '7%' }}/></colgroup>
+                <colgroup><col style={{ width: '13%' }}/><col style={{ width: '13%' }}/><col style={{ width: '13%' }}/><col style={{ width: '10%' }}/><col style={{ width: '10%' }}/><col style={{ width: '10%' }}/><col style={{ width: '15%' }}/><col style={{ width: '8%' }}/><col style={{ width: '8%' }}/></colgroup>
                 <thead className="bg-gradient-to-r from-blue-600 to-blue-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Date/Time</th>
@@ -818,6 +521,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Per Hour Target</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Production</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Billable Hours</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Notes</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-center">Task File</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-center">Action</th>
                   </tr>
@@ -825,7 +529,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                 <tbody className="divide-y divide-slate-200">
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-20">
+                      <td colSpan={9} className="text-center py-20">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                           <span className="font-semibold text-slate-600">Loading trackers...</span>
@@ -834,7 +538,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                     </tr>
                   ) : trackers.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-20">
+                      <td colSpan={9} className="text-center py-20">
                         <div className="flex flex-col items-center gap-2">
                           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300">
                             <circle cx="12" cy="12" r="10"/>
@@ -869,6 +573,36 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                         {tracker.billable_hours !== null && tracker.billable_hours !== undefined
                           ? Number(tracker.billable_hours).toFixed(2)
                           : "0.00"}
+                      </td>
+                      <td className="px-5 py-4 align-middle text-slate-600 text-sm">
+                        {tracker.tracker_note || tracker.notes ? (
+                          <div className="relative inline-flex items-center gap-1">
+                            <span>
+                              {(tracker.tracker_note || tracker.notes).length > 10
+                                ? `${(tracker.tracker_note || tracker.notes).substring(0, 10)}...`
+                                : tracker.tracker_note || tracker.notes}
+                            </span>
+                            {(tracker.tracker_note || tracker.notes).length > 10 && (
+                              <div className="relative group/notes">
+                                <Info className="w-4 h-4 text-blue-500 cursor-pointer hover:text-blue-700 transition-colors" />
+                                {/* Tooltip - Only shows on hover of icon */}
+                                <div className={`absolute right-0 ${index >= trackers.length - 3 ? 'bottom-full mb-2' : 'top-full mt-2'} hidden group-hover/notes:block z-50 pointer-events-none`}>
+                                  <div className="bg-white text-slate-800 text-xs rounded-lg px-3 py-2 shadow-xl border border-slate-200 min-w-[400px] max-w-2xl max-h-32 break-words whitespace-normal">
+                                    {tracker.tracker_note || tracker.notes}
+                                    {/* Arrow */}
+                                    {index >= trackers.length - 3 ? (
+                                      <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
+                                    ) : (
+                                      <div className="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-white"></div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 font-medium">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-4 align-middle text-center">
                         {tracker.tracker_file ? (

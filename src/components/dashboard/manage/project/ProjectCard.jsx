@@ -289,8 +289,10 @@ const ProjectCard = ({
           onClose={() => setEditTaskModal({ open: false, task: null })}
           task={editTaskModal.task}
           projectId={project.id}
-          onTaskUpdated={() => {
-            onUpdateTask && onUpdateTask();
+          onTaskUpdated={async (projectId, taskId, taskPayload) => {
+            if (onUpdateTask) {
+              await onUpdateTask(projectId, taskId, taskPayload);
+            }
             setTaskTableRefresh(Date.now());
             setEditTaskModal({ open: false, task: null });
           }}

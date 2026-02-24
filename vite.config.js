@@ -1,18 +1,25 @@
 import { defineConfig, loadEnv } from "vite";
 import process from "node:process";
+import path from "path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const apiBaseURL = env.VITE_API_BASE_URL;
+  const apiBaseURL = "http://192.168.125.203:5000";
 
   return {
     plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
     server: {
       port: 5000,
       open: true,
       proxy: {
+        // ...existing code...
         "/auth": {
           target: apiBaseURL,
           changeOrigin: true,
@@ -53,9 +60,22 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        "/password_reset": {
+          target: apiBaseURL,
+          changeOrigin: true,
+          secure: false,
+        },
+        "/user_monthly_tracker": {
+          target: apiBaseURL,
+          changeOrigin: true,
+          secure: false,
+        },
+        "/qc": {
+          target: apiBaseURL,
+          changeOrigin: true,
+          secure: false,
+        },
       },
-      // Fix: Serve index.html for unknown routes (SPA fallback)
-      middlewareMode: false,
       historyApiFallback: true,
     },
   };

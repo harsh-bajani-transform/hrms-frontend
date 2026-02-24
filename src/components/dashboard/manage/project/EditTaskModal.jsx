@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { X } from 'lucide-react';
+import { X, Upload, ChevronDown, ExternalLink, Users, Table } from 'lucide-react';
 import { updateTask } from '../../../../services/projectService';
 import { fetchDropdown } from '../../../../services/dropdownService';
+import MultiSelectWithCheckbox from '../../../common/MultiSelectWithCheckbox';
+import * as XLSX from 'xlsx';
 
 const EditTaskModal = ({
   open,
@@ -16,16 +18,20 @@ const EditTaskModal = ({
     description: '',
     target: '',
     teamIds: [],
-    // assistantManagerIds: [],
-    // qaManagerIds: [],
+    file: null,
+    existingFileUrl: '',
+    importantColumns: [],
   });
-  // Removed Assistant and QA Manager fields
-  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agents, setAgents] = useState([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [agentsError, setAgentsError] = useState('');
+  
+  const fileInputRef = useRef(null);
+  
+  // Dynamic important columns options from Excel file
+  const [excelColumnHeaders, setExcelColumnHeaders] = useState([]);
 
   useEffect(() => {
     if (open && task) {
@@ -37,13 +43,72 @@ const EditTaskModal = ({
       } else if (Array.isArray(task.teamIds)) {
         teamIds = task.teamIds.map(id => String(id));
       }
+      
+      // Parse important columns if exists
+      let importantColumns = [];
+      if (task.important_columns) {
+        try {
+          importantColumns = typeof task.important_columns === 'string' 
+            ? JSON.parse(task.important_columns) 
+            : task.important_columns;
+          if (!Array.isArray(importantColumns)) importantColumns = [];
+        } catch (e) {
+          console.error('Error parsing important columns:', e);
+          importantColumns = [];
+        }
+      }
+      
+      // Try to fetch and parse the existing Excel file to get all column headers
+      const fileUrl = task.task_file || task.file || '';
+      if (fileUrl) {
+        fetch(fileUrl)
+          .then(response => {
+            // Check if response is actually an Excel file
+            const contentType = response.headers.get('content-type');
+            if (!response.ok || (contentType && !contentType.includes('spreadsheet') && !contentType.includes('excel') && !contentType.includes('octet-stream'))) {
+              throw new Error('Invalid file response');
+            }
+            return response.arrayBuffer();
+          })
+          .then(data => {
+            try {
+              const workbook = XLSX.read(data, { type: 'array' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              
+              // Get first row (column headers)
+              if (jsonData && jsonData.length > 0 && jsonData[0]) {
+                const headers = jsonData[0].filter(header => header && String(header).trim());
+                const allHeaders = headers.map(h => String(h));
+                setExcelColumnHeaders(allHeaders);
+              } else {
+                // Fallback to important columns if file parsing fails
+                setExcelColumnHeaders(importantColumns.length > 0 ? importantColumns : []);
+              }
+            } catch (error) {
+              // Silently fall back - file parsing failed
+              setExcelColumnHeaders(importantColumns.length > 0 ? importantColumns : []);
+            }
+          })
+          .catch(error => {
+            // Silently fall back - file doesn't exist or can't be accessed
+            setExcelColumnHeaders(importantColumns.length > 0 ? importantColumns : []);
+          });
+      } else {
+        // No file URL, use important columns as headers
+        setExcelColumnHeaders(importantColumns.length > 0 ? importantColumns : []);
+      }
+      
       setFormData({
         name: task.task_name || task.name || '',
         description: task.task_description || task.description || '',
         target: task.task_target || task.target || '',
         teamIds,
+        file: null,
+        existingFileUrl: fileUrl,
+        importantColumns,
       });
-      setShowTeamDropdown(false);
     } else if (!open) {
       // Reset form data when modal closes to avoid stale data
       setFormData({
@@ -51,8 +116,11 @@ const EditTaskModal = ({
         description: '',
         target: '',
         teamIds: [],
+        file: null,
+        existingFileUrl: '',
+        importantColumns: [],
       });
-      setShowTeamDropdown(false);
+      setExcelColumnHeaders([]);
     }
   }, [open, task]);
 
@@ -77,8 +145,6 @@ const EditTaskModal = ({
     };
     loadAgents();
   }, [projectId]);
-  // Multi-select handlers for assistant managers and QA managers
-  // Removed Assistant/QA selection handlers
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -86,32 +152,100 @@ const EditTaskModal = ({
       setFormErrors((prev) => ({ ...prev, [field]: '' }));
     }
   };
-
-  const toggleTeamSelection = (id) => {
+  
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData((prev) => ({ ...prev, file }));
+      
+      // Read Excel file and extract column headers
+      try {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            // Get first row (column headers)
+            if (jsonData && jsonData.length > 0 && jsonData[0]) {
+              const headers = jsonData[0].filter(header => header && String(header).trim());
+              setExcelColumnHeaders(headers.map(h => String(h)));
+              // Clear previously selected important columns when new file is uploaded
+              setFormData((prev) => ({ ...prev, importantColumns: [] }));
+            }
+          } catch (error) {
+            console.error('Error reading Excel file:', error);
+            toast.error('Failed to read Excel file');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (error) {
+        console.error('Error processing file:', error);
+        toast.error('Failed to process Excel file');
+      }
+    }
+  };
+  
+  const handleRemoveFile = () => {
+    setFormData((prev) => ({ ...prev, file: null }));
+    
+    // Restore original important columns from task if exists
+    if (task && task.important_columns) {
+      try {
+        const originalImportantColumns = typeof task.important_columns === 'string' 
+          ? JSON.parse(task.important_columns) 
+          : task.important_columns;
+        if (Array.isArray(originalImportantColumns) && originalImportantColumns.length > 0) {
+          setExcelColumnHeaders(originalImportantColumns);
+          setFormData((prev) => ({ ...prev, importantColumns: originalImportantColumns }));
+        } else {
+          setExcelColumnHeaders([]);
+          setFormData((prev) => ({ ...prev, importantColumns: [] }));
+        }
+      } catch (e) {
+        setExcelColumnHeaders([]);
+        setFormData((prev) => ({ ...prev, importantColumns: [] }));
+      }
+    } else {
+      setExcelColumnHeaders([]);
+      setFormData((prev) => ({ ...prev, importantColumns: [] }));
+    }
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  const toggleImportantColumn = (column) => {
     setFormData((prev) => {
-      const exists = prev.teamIds.includes(id);
-      const updated = exists ? prev.teamIds.filter((t) => t !== id) : [...prev.teamIds, id];
-      return { ...prev, teamIds: updated };
+      const exists = prev.importantColumns.includes(column);
+      const updated = exists
+        ? prev.importantColumns.filter((c) => c !== column)
+        : [...prev.importantColumns, column];
+      return { ...prev, importantColumns: updated };
     });
+  };
+  
+  const handleSelectAllImportantColumns = (isChecked) => {
+    if (isChecked) {
+      setFormData((prev) => ({ ...prev, importantColumns: [...excelColumnHeaders] }));
+    } else {
+      setFormData((prev) => ({ ...prev, importantColumns: [] }));
+    }
+  };
+
+  const handleTeamChange = (newTeamIds) => {
+    setFormData((prev) => ({ ...prev, teamIds: newTeamIds }));
     if (formErrors.teamIds) {
       setFormErrors((prev) => ({ ...prev, teamIds: '' }));
     }
   };
 
-  const handleSelectAllTeams = (isChecked) => {
-    if (isChecked) {
-      // Select all agents
-      const allAgentIds = agents.map(agent => agent.id);
-      setFormData((prev) => ({ ...prev, teamIds: allAgentIds }));
-    } else {
-      // Deselect all agents
-      setFormData((prev) => ({ ...prev, teamIds: [] }));
-    }
-    
-    // Clear error when user makes a selection
-    if (isChecked && formErrors.teamIds) {
-      setFormErrors((prev) => ({ ...prev, teamIds: '' }));
-    }
+  const handleImportantColumnsChange = (newColumns) => {
+    setFormData((prev) => ({ ...prev, importantColumns: newColumns }));
   };
 
   const validateForm = () => {
@@ -131,31 +265,29 @@ const EditTaskModal = ({
   const handleSubmit = async () => {
     if (!validateForm()) return;
     setIsSubmitting(true);
-    // Log all selected data for debugging
-    console.log('Submitting Task Edit:', {
+    
+    // Prepare payload with all fields including file and important columns
+    const taskPayload = {
+      name: formData.name,
+      description: formData.description,
+      target: formData.target,
       teamIds: formData.teamIds,
-    });
-    const payload = {
-      task_id: task.task_id || task.id,
-      project_id: projectId,
-      task_name: formData.name,
-      task_description: formData.description,
-      task_target: formData.target,
-      task_team_id: formData.teamIds.map(id => (isNaN(id) ? id : Number(id))),
-      // assistant_manager_ids and qa_manager_ids removed
+      file: formData.file, // New file if uploaded
+      importantColumns: formData.importantColumns,
     };
+    
     try {
-      const res = await updateTask(payload);
-      setIsSubmitting(false);
-      if (res && (res.status === 200 || res.success || res.updated || res.message === 'Task updated successfully')) {
-        toast.success('Task updated successfully');
-        onTaskUpdated && onTaskUpdated();
-        onClose();
-      } else {
-        setFormErrors({ submit: res?.message || 'Failed to update task' });
+      // Call the parent's onTaskUpdated callback
+      if (onTaskUpdated) {
+        await onTaskUpdated(projectId, task.task_id || task.id, taskPayload);
       }
+      setIsSubmitting(false);
+      toast.success('Task updated successfully');
+      onClose();
     } catch (err) {
       setIsSubmitting(false);
+      console.error('Error updating task:', err);
+      toast.error(err?.message || 'Failed to update task');
       setFormErrors({ submit: err?.message || 'Failed to update task' });
     }
   };
@@ -215,83 +347,97 @@ const EditTaskModal = ({
                   disabled={isSubmitting}
                 />
               </div>
+              
+              {/* Task File Upload - Excel Only */}
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-500 mb-1 text-left">Team (Agents) <span className="text-red-600">*</span></label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowTeamDropdown((prev) => !prev)}
-                    className="flex items-center justify-between w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
-                  >
-                    <span className="truncate text-left">
-                      {formData.teamIds.length === 0
-                        ? (agentsLoading ? 'Loading agents...' : 'Select agents')
-                        : agents
-                            .filter((a) => formData.teamIds.includes(a.id))
-                            .map((a) => a.label)
-                            .filter(Boolean)
-                            .join(', ') || `${formData.teamIds.length} selected`}
-                    </span>
-                  </button>
-                  {showTeamDropdown && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                      {agentsLoading && (
-                        <div className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500">
-                          Loading agents...
-                        </div>
-                      )}
-                      {!agentsLoading && agents.length === 0 && (
-                        <div className="px-3 py-2 text-sm text-slate-500">
-                          {agentsError || 'No agents available'}
-                        </div>
-                      )}
-                      {!agentsLoading && agents.length > 0 && (
-                        <>
-                          {/* Select All Option */}
-                          <label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
-                            <input
-                              type="checkbox"
-                              className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-                              checked={agents.length > 0 && formData.teamIds.length === agents.length}
-                              onChange={(e) => handleSelectAllTeams(e.target.checked)}
-                            />
-                            <span className="font-semibold text-slate-900">Select All</span>
-                          </label>
-                          {agents.map((agent) => (
-                            <label key={agent.id} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-                                checked={formData.teamIds.includes(agent.id)}
-                                onChange={() => toggleTeamSelection(agent.id)}
-                              />
-                              <span className="text-slate-700">{agent.label || 'Unnamed agent'}</span>
-                            </label>
-                          ))}
-                        </>
-                      )}
+                <label className="block text-xs font-semibold text-slate-500 mb-1 text-left">Task File (Excel Only)</label>
+                <div className="space-y-2">
+                  {/* Existing file display */}
+                  {formData.existingFileUrl && !formData.file && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm">
+                      <span className="text-slate-700">Current file:</span>
+                      <a
+                        href={formData.existingFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {formData.existingFileUrl.split('/').pop() || 'View file'}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
                   )}
-                </div>
-                {formErrors.teamIds && <p className="text-xs text-red-600 mt-1">{formErrors.teamIds}</p>}
-                {formData.teamIds.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {formData.teamIds.map((id) => {
-                      const agent = agents.find((a) => a.id === id);
-                      return (
-                        <span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                          {agent?.label || id}
-                          <button onClick={() => toggleTeamSelection(id)} className="text-blue-600 hover:text-blue-800">
-                            &times;
-                          </button>
-                        </span>
-                      );
-                    })}
+                  
+                  {/* File upload/replace */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="task-file-upload-edit"
+                      accept=".xlsx,.xls"
+                      disabled={isSubmitting}
+                    />
+                    <label
+                      htmlFor="task-file-upload-edit"
+                      className={`flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {formData.existingFileUrl ? 'Replace Excel File' : 'Choose Excel File'}
+                    </label>
+                    {formData.file && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                        <span className="text-blue-800 truncate max-w-xs">{formData.file.name}</span>
+                        <button
+                          onClick={handleRemoveFile}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Remove file"
+                          disabled={isSubmitting}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+                  {excelColumnHeaders.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ {formData.file ? `Found ${excelColumnHeaders.length} columns in Excel file` : `${excelColumnHeaders.length} columns available`}
+                    </p>
+                  )}
+                </div>
               </div>
-
-              {/* Assistant Project Manager(s) and QA Manager(s) fields removed */}
+              
+              {/* Important Columns Dropdown - Populated from Excel */}
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 mb-1 text-left">Important Columns</label>
+                <MultiSelectWithCheckbox
+                  value={formData.importantColumns}
+                  onChange={handleImportantColumnsChange}
+                  options={excelColumnHeaders.map(col => ({ value: col, label: col }))}
+                  icon={Table}
+                  placeholder={excelColumnHeaders.length === 0 ? "Upload Excel file first" : "Select important columns"}
+                  disabled={excelColumnHeaders.length === 0 || isSubmitting}
+                  showSelectAll={true}
+                  maxDisplayCount={2}
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 mb-1 text-left">Team (Agents) <span className="text-red-600">*</span></label>
+                <MultiSelectWithCheckbox
+                  value={formData.teamIds}
+                  onChange={handleTeamChange}
+                  options={agents.map(agent => ({ value: agent.id, label: agent.label }))}
+                  icon={Users}
+                  placeholder={agentsLoading ? "Loading agents..." : agents.length === 0 ? (agentsError || "No agents available") : "Select agents"}
+                  disabled={agentsLoading || agents.length === 0 || isSubmitting}
+                  showSelectAll={true}
+                  error={!!formErrors.teamIds}
+                  errorMessage={formErrors.teamIds}
+                  maxDisplayCount={2}
+                />
+              </div>
             </div>
             <div className="mt-4 flex justify-end">
               <button

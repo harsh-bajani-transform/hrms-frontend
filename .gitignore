@@ -11,10 +11,12 @@ dist/
 # Environment variables
 .env
 .env.local
+.env.development
 .env.development.local
 .env.test.local
 .env.production.local
 *.env
+vite.config.js
 
 # Logs
 *.log
