@@ -153,26 +153,26 @@ const AddProjectFormModal = ({
      const processedProjectManagers = getItemsWithConsistentStructure(projectManagers);
      const processedProjectCategories = getItemsWithConsistentStructure(projectCategories);
      
-     console.log('[AddProjectFormModal] Project Categories:', {
-          raw: projectCategories,
-          processed: processedProjectCategories
-     });
+     // console.log('[AddProjectFormModal] Project Categories:', {
+     //      raw: projectCategories,
+     //      processed: processedProjectCategories
+     // });
      
      // Build options for project category
-     const projectCategoryOptions = [
-          { value: "", label: "Select Category" },
-          ...processedProjectCategories
-               .filter((cat) => {
-                    const id = cat.project_category_id ?? cat.afd_id ?? cat.id;
-                    return id !== null && id !== undefined && String(id) !== 'undefined';
-               })
-               .map((cat) => ({ 
-                    value: String(cat.project_category_id ?? cat.afd_id ?? cat.id), 
-                    label: cat.label 
-               }))
-     ];
+     // const projectCategoryOptions = [
+     //      { value: "", label: "Select Category" },
+     //      ...processedProjectCategories
+     //           .filter((cat) => {
+     //                const id = cat.project_category_id ?? cat.afd_id ?? cat.id;
+     //                return id !== null && id !== undefined && String(id) !== 'undefined';
+     //           })
+     //           .map((cat) => ({ 
+     //                value: String(cat.project_category_id ?? cat.afd_id ?? cat.id), 
+     //                label: cat.label 
+     //           }))
+     // ];
      
-     console.log('[AddProjectFormModal] Final category options:', projectCategoryOptions);
+     // console.log('[AddProjectFormModal] Final category options:', projectCategoryOptions);
 
      const toggleDropdown = (dropdown) => {
           setDropdownOpen(prev => ({
@@ -312,7 +312,7 @@ const AddProjectFormModal = ({
                               </div>
 
                               {/* Project Category */}
-                              <div>
+                              {/* <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Project Category
                                    </label>
@@ -328,7 +328,7 @@ const AddProjectFormModal = ({
                                         error={!!formErrors.projectCategoryId}
                                         errorMessage={formErrors.projectCategoryId}
                                    />
-                              </div>
+                              </div> */}
 
                               {/* Project Manager */}
                               <div>

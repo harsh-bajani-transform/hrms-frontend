@@ -85,12 +85,12 @@ const SearchableSelect = ({
         }}
         disabled={disabled}
         className={`
-          relative flex items-center bg-slate-50 rounded-lg border-2 transition-all w-full px-3 py-2.5 outline-none shadow-sm
+          relative flex items-center bg-slate-50 rounded-lg border transition-all w-full px-3 py-2.5 outline-none shadow-sm hover:bg-white
           ${error 
             ? 'border-red-500 focus:ring-2 focus:ring-red-200' 
             : disabled 
               ? 'border-slate-200 bg-slate-100 cursor-not-allowed opacity-60' 
-              : 'border-blue-200 hover:bg-blue-50 hover:border-blue-400 focus:ring-2 focus:ring-blue-200 focus:border-blue-500'
+              : 'border-slate-300 hover:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:border-blue-500'
           }
         `}
       >
@@ -137,7 +137,7 @@ const SearchableSelect = ({
 
       {/* Dropdown Menu */}
       {isOpen && !disabled && (
-        <div className="absolute z-50 mt-2 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 py-1 max-h-72 overflow-hidden flex flex-col">
+        <div className="absolute z-50 mt-2 w-full bg-white rounded-lg shadow-xl border border-slate-300 py-1 max-h-72 overflow-hidden flex flex-col">
           {/* Search Input */}
           <div className="px-3 py-2 border-b border-slate-200">
             <div className="relative">

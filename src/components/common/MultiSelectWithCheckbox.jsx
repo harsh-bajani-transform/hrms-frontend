@@ -117,7 +117,7 @@ const MultiSelectWithCheckbox = ({
             ? 'border-red-500 focus:ring-2 focus:ring-red-200' 
             : disabled 
               ? 'border-slate-200 bg-slate-100 cursor-not-allowed opacity-60' 
-              : 'border-blue-200 hover:bg-blue-50 hover:border-blue-400 focus:ring-2 focus:ring-blue-200 focus:border-blue-500'
+              : 'border-blue-200 hover:bg-blue-50 hover:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:border-blue-500'
           }
         `}
       >

@@ -512,12 +512,13 @@ const TrackerTable = ({ userId, projects, onClose }) => {
           <div className="overflow-x-auto">
             <div className="max-h-[600px] overflow-y-auto">
               <table className="min-w-full text-sm text-slate-700 table-fixed">
-                <colgroup><col style={{ width: '13%' }}/><col style={{ width: '13%' }}/><col style={{ width: '13%' }}/><col style={{ width: '10%' }}/><col style={{ width: '10%' }}/><col style={{ width: '10%' }}/><col style={{ width: '15%' }}/><col style={{ width: '8%' }}/><col style={{ width: '8%' }}/></colgroup>
+                <colgroup><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '12%' }}/><col style={{ width: '9%' }}/><col style={{ width: '9%' }}/><col style={{ width: '9%' }}/><col style={{ width: '9%' }}/><col style={{ width: '13%' }}/><col style={{ width: '8%' }}/><col style={{ width: '7%' }}/></colgroup>
                 <thead className="bg-gradient-to-r from-blue-600 to-blue-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Date/Time</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Project</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Task</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Shift</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Per Hour Target</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Production</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Billable Hours</th>
@@ -529,7 +530,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                 <tbody className="divide-y divide-slate-200">
                   {loading ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-20">
+                      <td colSpan={10} className="text-center py-20">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                           <span className="font-semibold text-slate-600">Loading trackers...</span>
@@ -538,7 +539,7 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                     </tr>
                   ) : trackers.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-20">
+                      <td colSpan={10} className="text-center py-20">
                         <div className="flex flex-col items-center gap-2">
                           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300">
                             <circle cx="12" cy="12" r="10"/>
@@ -559,6 +560,17 @@ const TrackerTable = ({ userId, projects, onClose }) => {
                       </td>
                       <td className="px-5 py-4 align-middle text-slate-700 font-medium">{tracker.project_name || getProjectName(tracker.project_id)}</td>
                       <td className="px-5 py-4 align-middle text-slate-700">{tracker.task_name || getTaskName(tracker.task_id, tracker.project_id) || '-'}</td>
+                      <td className="px-5 py-4 align-middle text-slate-700">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          (tracker.shift || tracker.shift_type || '').toLowerCase() === 'day' || (tracker.shift || tracker.shift_type) === 'day_shift'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                            : (tracker.shift || tracker.shift_type || '').toLowerCase() === 'night' || (tracker.shift || tracker.shift_type) === 'night_shift'
+                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {(tracker.shift || tracker.shift_type || '').toLowerCase() === 'day' || (tracker.shift || tracker.shift_type) === 'day_shift' ? 'Day' : (tracker.shift || tracker.shift_type || '').toLowerCase() === 'night' || (tracker.shift || tracker.shift_type) === 'night_shift' ? 'Night' : '—'}
+                        </span>
+                      </td>
                       <td className="px-5 py-4 align-middle text-slate-700 font-semibold">
                         {tracker.tenure_target !== null && tracker.tenure_target !== undefined 
                           ? Number(tracker.tenure_target).toFixed(2) 

@@ -110,7 +110,7 @@ export const DateRangePicker = ({
                 type="button"
                 disabled={disabled}
                 className={cn(
-                  "w-full bg-slate-50 border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-blue-50 hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm text-left flex items-center justify-between",
+                  "w-full bg-slate-50 border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-blue-50 hover:border-blue-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm text-left flex items-center justify-between",
                   disabled && "opacity-50 cursor-not-allowed"
                 )}
               >
@@ -164,7 +164,7 @@ export const DateRangePicker = ({
                 type="button"
                 disabled={disabled}
                 className={cn(
-                  "w-full bg-slate-50 border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-blue-50 hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm text-left flex items-center justify-between",
+                  "w-full bg-slate-50 border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-blue-50 hover:border-blue-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm text-left flex items-center justify-between",
                   disabled && "opacity-50 cursor-not-allowed"
                 )}
               >
@@ -286,7 +286,7 @@ export const MonthYearPicker = ({
                 type="button"
                 disabled={disabled}
                 className={cn(
-                  "bg-slate-50 border-2 border-blue-200 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-left flex items-center justify-between w-[180px]",
+                  "bg-slate-50 border-2 border-blue-200 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:border-blue-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-left flex items-center justify-between w-[180px]",
                   disabled && "opacity-50 cursor-not-allowed"
                 )}
               >

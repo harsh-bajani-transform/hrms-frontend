@@ -190,7 +190,7 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
           assistantManagerIds: [],
           qaManagerIds: [],
           teamIds: [],
-          projectCategoryId: '',
+          // projectCategoryId: '',
      });
 
      const [projectFiles, setProjectFiles] = useState([]);
@@ -245,9 +245,9 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                formData.append('project_manager_id', Number(newProject.projectManagerId));
                
                // Append project category if selected
-               if (newProject.projectCategoryId) {
-                    formData.append('project_category_id', Number(newProject.projectCategoryId));
-               }
+               // if (newProject.projectCategoryId) {
+               //      formData.append('project_category_id', Number(newProject.projectCategoryId));
+               // }
                
                // Append array fields as JSON strings (backend expects this format)
                formData.append('asst_project_manager_id', JSON.stringify(newProject.assistantManagerIds.map(id => Number(id))));
@@ -348,8 +348,8 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                teamIds: (project.teamIds
                     ? project.teamIds.map(String)
                     : project.project_team?.map(u => String(u.user_id)) || project.project_team_id?.map(String) || []),
-               projectCategoryId: String(project.projectCategoryId || project.project_category_id || ''),
-               projectCategoryName: project.project_category_name || '',
+               // projectCategoryId: String(project.projectCategoryId || project.project_category_id || ''),
+               // projectCategoryName: project.project_category_name || '',
           });
           
           // Set projectFiles from project.project_files array (URLs)
@@ -437,9 +437,9 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                formData.append('project_manager_id', Number(projectData.projectManagerId));
                
                // Append project category if provided
-               if (projectData.projectCategoryId) {
-                    formData.append('project_category_id', Number(projectData.projectCategoryId));
-               }
+               // if (projectData.projectCategoryId) {
+               //      formData.append('project_category_id', Number(projectData.projectCategoryId));
+               // }
                
                // Append array fields as JSON strings (backend expects this format)
                formData.append('asst_project_manager_id', JSON.stringify(projectData.assistantManagerIds.map(id => Number(id))));
@@ -806,7 +806,7 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                assistantManagerIds: [],
                qaManagerIds: [],
                teamIds: [],
-               projectCategoryId: '',
+               // projectCategoryId: '',
           });
           setProjectFiles([]);
           setFormErrors({});

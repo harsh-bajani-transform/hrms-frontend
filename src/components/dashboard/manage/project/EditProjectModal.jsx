@@ -143,7 +143,7 @@ const EditProjectModal = ({
 				qaManagerIds,
 				teamIds,
 				projectManagerId: String(project.projectManagerId || project.project_manager_id || ""),
-				projectCategoryId: String(project.projectCategoryId || project.project_category_id || ""),
+				// projectCategoryId: String(project.projectCategoryId || project.project_category_id || ""),
 				name: project.name || project.project_name || "",
 				code: project.code || project.project_code || "",
 				description: project.description || project.project_description || "",
@@ -175,20 +175,20 @@ const EditProjectModal = ({
 	const processedProjectManagers = normalizeList(projectManagers, 'user_id', 'user_name');
 	const processedProjectCategories = normalizeList(projectCategories, 'project_category_id', 'label');
 	
-	console.log('[EditProjectModal] Project Categories:', {
-		raw: projectCategories,
-		processed: processedProjectCategories
-	});
+	// console.log('[EditProjectModal] Project Categories:', {
+	// 	raw: projectCategories,
+	// 	processed: processedProjectCategories
+	// });
 	
 	// Build options for project category
-	const projectCategoryOptions = [
-		{ value: "", label: "Select Category" },
-		...processedProjectCategories
-			.filter((cat) => cat.id !== null && cat.id !== undefined && String(cat.id) !== 'undefined')
-			.map((cat) => ({ value: cat.id, label: cat.label }))
-	];
+	// const projectCategoryOptions = [
+	// 	{ value: "", label: "Select Category" },
+	// 	...processedProjectCategories
+	// 		.filter((cat) => cat.id !== null && cat.id !== undefined && String(cat.id) !== 'undefined')
+	// 		.map((cat) => ({ value: cat.id, label: cat.label }))
+	// ];
 	
-	console.log('[EditProjectModal] Final category options:', projectCategoryOptions);
+	// console.log('[EditProjectModal] Final category options:', projectCategoryOptions);
 
 	const handleFileChange = (e) => {
 		const files = e.target.files;
@@ -278,7 +278,7 @@ const EditProjectModal = ({
 								onChange={e => setEditProject(prev => ({ ...prev, description: e.target.value }))}
 							/>
 						</div>					{/* Project Category */}
-					<div>
+					{/* <div>
 						<label className="block text-sm font-semibold text-gray-700 mb-2">
 							Project Category
 						</label>
@@ -299,7 +299,7 @@ const EditProjectModal = ({
 							error={!!formErrors.projectCategoryId}
 							errorMessage={formErrors.projectCategoryId}
 						/>
-					</div>						{/* Project Manager */}
+					</div> */}						{/* Project Manager */}
 						<div>
 							<label className="block text-sm font-semibold text-gray-700 mb-2">
 								Project Manager <span className="text-red-600">*</span>
