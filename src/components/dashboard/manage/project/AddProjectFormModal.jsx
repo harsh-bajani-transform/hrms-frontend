@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Briefcase, X, Upload, XCircle, ChevronDown, Check, User } from "lucide-react";
-import CustomSelect from "../../../common/CustomSelect";
+import { Briefcase, X, Upload, XCircle, User, Users } from "lucide-react";
+import SearchableSelect from "../../../common/SearchableSelect";
+import MultiSelectWithCheckbox from "../../../common/MultiSelectWithCheckbox";
 
 const AddProjectFormModal = ({
      newProject,
@@ -11,6 +12,7 @@ const AddProjectFormModal = ({
      assistantManagers = [],
      qaManagers = [],
      teams = [],
+     projectCategories = [],
      formErrors = {},
      clearFieldError,
      isSubmitting = false,
@@ -116,26 +118,32 @@ const AddProjectFormModal = ({
           if (!items || items.length === 0) return [];
 
           // Handle different data structures
-          return items.map(item => {
-               // If it's an array of arrays, get the first object
-               if (Array.isArray(item) && item.length > 0) {
-                    const firstItem = item[0];
-                    return {
-                         id: firstItem.user_id || firstItem.team_id,
-                         label: firstItem.label,
-                         user_id: firstItem.user_id || firstItem.team_id,
-                         team_id: firstItem.team_id,
-                    };
-               }
+          return items
+               .map(item => {
+                    // If it's an array of arrays, get the first object
+                    if (Array.isArray(item) && item.length > 0) {
+                         const firstItem = item[0];
+                         return {
+                              id: firstItem.project_category_id ?? firstItem.afd_id ?? firstItem.user_id ?? firstItem.team_id,
+                              label: firstItem.label,
+                              user_id: firstItem.user_id || firstItem.team_id,
+                              team_id: firstItem.team_id,
+                              afd_id: firstItem.afd_id,
+                              project_category_id: firstItem.project_category_id,
+                         };
+                    }
 
-               // If it's already an object
-               return {
-                    id: item.user_id || item.team_id,
-                    label: item.label,
-                    user_id: item.user_id || item.team_id,
-                    team_id: item.team_id,
-               };
-          });
+                    // If it's already an object
+                    return {
+                         id: item.project_category_id ?? item.afd_id ?? item.user_id ?? item.team_id,
+                         label: item.label,
+                         user_id: item.user_id || item.team_id,
+                         team_id: item.team_id,
+                         afd_id: item.afd_id,
+                         project_category_id: item.project_category_id,
+                    };
+               })
+               .filter(item => item.id !== null && item.id !== undefined && String(item.id) !== 'undefined');
      };
 
      // Get processed items
@@ -143,6 +151,28 @@ const AddProjectFormModal = ({
      const processedQaManagers = getItemsWithConsistentStructure(qaManagers);
      const processedTeams = getItemsWithConsistentStructure(teams);
      const processedProjectManagers = getItemsWithConsistentStructure(projectManagers);
+     const processedProjectCategories = getItemsWithConsistentStructure(projectCategories);
+     
+     // console.log('[AddProjectFormModal] Project Categories:', {
+     //      raw: projectCategories,
+     //      processed: processedProjectCategories
+     // });
+     
+     // Build options for project category
+     // const projectCategoryOptions = [
+     //      { value: "", label: "Select Category" },
+     //      ...processedProjectCategories
+     //           .filter((cat) => {
+     //                const id = cat.project_category_id ?? cat.afd_id ?? cat.id;
+     //                return id !== null && id !== undefined && String(id) !== 'undefined';
+     //           })
+     //           .map((cat) => ({ 
+     //                value: String(cat.project_category_id ?? cat.afd_id ?? cat.id), 
+     //                label: cat.label 
+     //           }))
+     // ];
+     
+     // console.log('[AddProjectFormModal] Final category options:', projectCategoryOptions);
 
      const toggleDropdown = (dropdown) => {
           setDropdownOpen(prev => ({
@@ -200,8 +230,8 @@ const AddProjectFormModal = ({
 
      return (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-               <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
-                    <div className="p-4 bg-blue-800 text-white flex justify-between items-center shrink-0">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[98vh] flex flex-col overflow-hidden animate-fade-in-up">
+                    <div className="p-3 bg-blue-800 text-white flex justify-between items-center shrink-0">
                          <div>
                               <h2 className="text-lg font-bold flex items-center gap-2">
                                    <Briefcase className="w-5 h-5 text-blue-300" />
@@ -221,8 +251,8 @@ const AddProjectFormModal = ({
                          </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-white">
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex-1 overflow-y-auto p-3 md:p-4 bg-white">
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                               {/* Project Name */}
                               <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -230,7 +260,7 @@ const AddProjectFormModal = ({
                                    </label>
                                    <input
                                         type="text"
-                                        className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg 
+                                        className="block w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg 
                   focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="e.g. MoveEasy Platform"
                                         value={newProject.name}
@@ -252,7 +282,7 @@ const AddProjectFormModal = ({
                                    </label>
                                    <input
                                         type="text"
-                                        className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg 
+                                        className="block w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg 
                   focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="e.g. MOVE123"
                                         value={newProject.code}
@@ -273,20 +303,39 @@ const AddProjectFormModal = ({
                                         Project Description
                                    </label>
                                    <textarea
-                                        className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg 
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 h-12 resize-none"
+                                        className="block w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg 
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 h-10 resize-none"
                                         placeholder="Describe the project scope and features..."
                                         value={newProject.description}
                                         onChange={(e) => onFieldChange("description", e.target.value)}
                                    />
                               </div>
 
+                              {/* Project Category */}
+                              {/* <div>
+                                   <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Project Category
+                                   </label>
+                                   <SearchableSelect
+                                        value={newProject.projectCategoryId ? String(newProject.projectCategoryId) : ""}
+                                        onChange={(val) => {
+                                             onFieldChange("projectCategoryId", val);
+                                             clearFieldError?.("projectCategoryId");
+                                        }}
+                                        options={projectCategoryOptions}
+                                        icon={Briefcase}
+                                        placeholder="Select Category"
+                                        error={!!formErrors.projectCategoryId}
+                                        errorMessage={formErrors.projectCategoryId}
+                                   />
+                              </div> */}
+
                               {/* Project Manager */}
                               <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Project Manager <span className="text-red-600">*</span>
                                    </label>
-                                   <CustomSelect
+                                   <SearchableSelect
                                         value={newProject.projectManagerId ? String(newProject.projectManagerId) : ""}
                                         onChange={(val) => {
                                              onFieldChange("projectManagerId", val);
@@ -298,243 +347,69 @@ const AddProjectFormModal = ({
                                         ]}
                                         icon={User}
                                         placeholder="Select Project Manager"
+                                        error={!!formErrors.projectManagerId}
+                                        errorMessage={formErrors.projectManagerId}
                                    />
-                                   {formErrors.projectManagerId && (
-                                        <p className="mt-1 text-xs text-red-600">
-                                             {formErrors.projectManagerId}
-                                        </p>
-                                   )}
                               </div>
 
                               {/* Assistant Project Manager - Multi Select */}
-                              <div className="relative dropdown-container">
+                              <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Assistant Project Manager(s) <span className="text-red-600">*</span>
                                    </label>
-                                   <div className="relative">
-                                        <button
-                                             type="button"
-                                             className="flex items-center justify-between w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-100"
-                                             onClick={() => toggleDropdown("assistantManagers")}
-                                        >
-                                             <span className="truncate">
-                                                  {getSelectedItemsDisplay('assistantManagerIds', processedAssistantManagers)}
-                                             </span>
-                                             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.assistantManagers ? 'transform rotate-180' : ''}`} />
-                                        </button>
-
-                                        {dropdownOpen.assistantManagers && (
-                                             <div ref={dropdownRefs.assistantManagers} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                                                  {/* Select All Option */}
-                                                  <label className="flex items-center px-3 py-2 hover:bg-green-50 cursor-pointer border-b border-gray-200 bg-gray-50">
-                                                       <input
-                                                            type="checkbox"
-                                                            checked={processedAssistantManagers.length > 0 && (newProject.assistantManagerIds || []).length === processedAssistantManagers.length}
-                                                            onChange={(e) => handleSelectAll('assistantManagerIds', processedAssistantManagers, e.target.checked)}
-                                                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                                       />
-                                                       <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
-                                                  </label>
-                                                  {/* Show each user only once, checked if selected */}
-                                                  {[
-                                                       ...newProject.assistantManagerIds
-                                                            .map((id, idx) => processedAssistantManagers.find(am => String(am.user_id) === String(id)) || { user_id: id, label: `Unknown (${id})`, _idx: idx }),
-                                                       ...processedAssistantManagers.filter(am => !newProject.assistantManagerIds.includes(am.user_id))
-                                                  ].map((am, idx) => (
-                                                       <label
-                                                            key={am.user_id + '-' + (am._idx !== undefined ? am._idx : idx)}
-                                                            className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                       >
-                                                            <input
-                                                                 type="checkbox"
-                                                                 checked={isSelected('assistantManagerIds', am.user_id)}
-                                                                 onChange={(e) => handleMultipleSelect('assistantManagerIds', am.user_id, e.target.checked)}
-                                                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                            />
-                                                            <span className="ml-2 text-sm text-gray-700">
-                                                                 {am.label}
-                                                            </span>
-                                                       </label>
-                                                  ))}
-                                             </div>
-                                        )}
-                                        {formErrors.assistantManagerIds && (
-                                             <p className="mt-1 text-xs text-red-600">
-                                                  {formErrors.assistantManagerIds}
-                                             </p>
-                                        )}
-
-                                   </div>
-                                   {newProject.assistantManagerIds?.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                             {newProject.assistantManagerIds.map((id, idx) => {
-                                                  const am = processedAssistantManagers.find(a => String(a.user_id ?? a.id) === String(id));
-                                                  return am ? (
-                                                       <span key={id + '-' + idx} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                                                            {am.label}
-                                                            <button
-                                                                 type="button"
-                                                                 onClick={() => handleMultipleSelect('assistantManagerIds', id, false)}
-                                                                 className="text-blue-600 hover:text-blue-800"
-                                                            >
-                                                                 &times;
-                                                            </button>
-                                                       </span>
-                                                  ) : null;
-                                             })}
-                                        </div>
-                                   )}
+                                   <MultiSelectWithCheckbox
+                                        value={newProject.assistantManagerIds || []}
+                                        onChange={(val) => {
+                                             onFieldChange("assistantManagerIds", val);
+                                             clearFieldError?.("assistantManagerIds");
+                                        }}
+                                        options={processedAssistantManagers.map((am) => ({ value: String(am.user_id), label: am.label }))}
+                                        icon={Users}
+                                        placeholder="Select Assistant Project Managers"
+                                        error={!!formErrors.assistantManagerIds}
+                                        errorMessage={formErrors.assistantManagerIds}
+                                        maxDisplayCount={2}
+                                   />
                               </div>
 
                               {/* Quality Analyst - Multi Select */}
-                              <div className="relative dropdown-container">
+                              <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Quality Analyst(s) <span className="text-red-600">*</span>
                                    </label>
-                                   <div className="relative">
-                                        <button
-                                             type="button"
-                                             className="flex items-center justify-between w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-100"
-                                             onClick={() => toggleDropdown('qaManagers')}
-                                        >
-                                             <span className="truncate">
-                                                  {getSelectedItemsDisplay('qaManagerIds', processedQaManagers)}
-                                             </span>
-                                             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.qaManagers ? 'transform rotate-180' : ''}`} />
-                                        </button>
-                                        {dropdownOpen.qaManagers && (
-                                             <div ref={dropdownRefs.qaManagers} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                                                  {/* Select All Option */}
-                                                  <label className="flex items-center px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-gray-200 bg-gray-50">
-                                                       <input
-                                                            type="checkbox"
-                                                            checked={processedQaManagers.length > 0 && (newProject.qaManagerIds || []).length === processedQaManagers.length}
-                                                            onChange={(e) => handleSelectAll('qaManagerIds', processedQaManagers, e.target.checked)}
-                                                            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                                                       />
-                                                       <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
-                                                  </label>
-                                                  {/* Show each user only once, checked if selected */}
-                                                  {[
-                                                       ...newProject.qaManagerIds
-                                                            .map((id, idx) => processedQaManagers.find(qa => String(qa.user_id) === String(id)) || { user_id: id, label: `Unknown (${id})`, _idx: idx }),
-                                                       ...processedQaManagers.filter(qa => !newProject.qaManagerIds.includes(qa.user_id))
-                                                  ].map((qa, idx) => (
-                                                       <label
-                                                            key={qa.user_id + '-' + (qa._idx !== undefined ? qa._idx : idx)}
-                                                            className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                       >
-                                                            <input
-                                                                 type="checkbox"
-                                                                 checked={isSelected('qaManagerIds', qa.user_id)}
-                                                                 onChange={(e) => handleMultipleSelect('qaManagerIds', qa.user_id, e.target.checked)}
-                                                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                            />
-                                                            <span className="ml-2 text-sm text-gray-700">
-                                                                 {qa.label}
-                                                            </span>
-                                                       </label>
-                                                  ))}
-                                             </div>
-                                        )}
-                                   </div>
-                                   {newProject.qaManagerIds?.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                             {newProject.qaManagerIds.map((id, idx) => {
-                                                  const qa = processedQaManagers.find(q => String(q.user_id ?? q.id) === String(id));
-                                                  return qa ? (
-                                                       <span key={id + '-' + idx} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                                                            {qa.label}
-                                                            <button
-                                                                 type="button"
-                                                                 onClick={() => handleMultipleSelect('qaManagerIds', id, false)}
-                                                                 className="text-green-600 hover:text-green-800"
-                                                            >
-                                                                 &times;
-                                                            </button>
-                                                       </span>
-                                                  ) : null;
-                                             })}
-                                        </div>
-                                   )}
-                                   {formErrors.qaManagerIds && (
-                                        <p className="mt-1 text-xs text-red-600">
-                                             {formErrors.qaManagerIds}
-                                        </p>
-                                   )}
+                                   <MultiSelectWithCheckbox
+                                        value={newProject.qaManagerIds || []}
+                                        onChange={(val) => {
+                                             onFieldChange("qaManagerIds", val);
+                                             clearFieldError?.("qaManagerIds");
+                                        }}
+                                        options={processedQaManagers.map((qa) => ({ value: String(qa.user_id), label: qa.label }))}
+                                        icon={Users}
+                                        placeholder="Select Quality Analysts"
+                                        error={!!formErrors.qaManagerIds}
+                                        errorMessage={formErrors.qaManagerIds}
+                                        maxDisplayCount={2}
+                                   />
                               </div>
 
                               {/* Team Assignment - Multi Select */}
-                              <div className="relative dropdown-container">
+                              <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Agent(s) <span className="text-red-600">*</span>
                                    </label>
-                                   <div className="relative">
-                                        <button
-                                             type="button"
-                                             className="flex items-center justify-between w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-100"
-                                             onClick={() => toggleDropdown('teams')}
-                                        >
-                                             <span className="truncate">
-                                                  {getSelectedItemsDisplay('teamIds', processedTeams)}
-                                             </span>
-                                             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.teams ? 'transform rotate-180' : ''}`} />
-                                        </button>
-                                        {dropdownOpen.teams && (
-                                             <div ref={dropdownRefs.teams} className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                                                  {/* Select All Option */}
-                                                  <label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-200 bg-gray-50">
-                                                       <input
-                                                            type="checkbox"
-                                                            checked={processedTeams.length > 0 && (newProject.teamIds || []).length === processedTeams.length}
-                                                            onChange={(e) => handleSelectAll('teamIds', processedTeams, e.target.checked)}
-                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                       />
-                                                       <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
-                                                  </label>
-                                                  {processedTeams.map((team) => (
-                                                       <label
-                                                            key={team.user_id}
-                                                            className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                       >
-                                                            <input
-                                                                 type="checkbox"
-                                                                 checked={isSelected('teamIds', team.user_id)}
-                                                                 onChange={(e) => handleMultipleSelect('teamIds', team.user_id, e.target.checked)}
-                                                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                            />
-                                                            <span className="ml-2 text-sm text-gray-700">
-                                                                 {team.label}
-                                                            </span>
-                                                       </label>
-                                                  ))}
-                                             </div>
-                                        )}
-                                   </div>
-                                   {newProject.teamIds?.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                             {newProject.teamIds.map(id => {
-                                                  const team = processedTeams.find(t => String(t.user_id ?? t.id) === String(id));
-                                                  return team ? (
-                                                       <span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
-                                                            {team.label}
-                                                            <button
-                                                                 type="button"
-                                                                 onClick={() => handleMultipleSelect('teamIds', id, false)}
-                                                                 className="text-purple-600 hover:text-purple-800"
-                                                            >
-                                                                 &times;
-                                                            </button>
-                                                       </span>
-                                                  ) : null;
-                                             })}
-                                        </div>
-                                   )}
-                                   {formErrors.teamIds && (
-                                        <p className="mt-1 text-xs text-red-600">
-                                             {formErrors.teamIds}
-                                        </p>
-                                   )}
+                                   <MultiSelectWithCheckbox
+                                        value={newProject.teamIds || []}
+                                        onChange={(val) => {
+                                             onFieldChange("teamIds", val);
+                                             clearFieldError?.("teamIds");
+                                        }}
+                                        options={processedTeams.map((team) => ({ value: String(team.user_id), label: team.label }))}
+                                        icon={Users}
+                                        placeholder="Select Agents"
+                                        error={!!formErrors.teamIds}
+                                        errorMessage={formErrors.teamIds}
+                                        maxDisplayCount={2}
+                                   />
                               </div>
 
                               {/* Project Files Upload */}
@@ -632,7 +507,7 @@ const AddProjectFormModal = ({
                                              onClick={triggerFileInput}
                                              className="
         flex items-center justify-between
-        w-full px-3 py-3
+        w-full px-3 py-2.5
         text-sm bg-gray-50
         border border-gray-200 rounded-lg
         cursor-pointer

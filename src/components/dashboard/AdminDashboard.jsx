@@ -11,6 +11,7 @@ import { useDeviceInfo } from '../../hooks/useDeviceInfo';
 import BillableReport from "../common/BillableReport";
 import QATrackerReport from './QATrackerReport';
 import QAAgentList from './QAAgentList';
+import { DateRangePicker } from '../common/CustomCalendar';
 
 const AdminDashboard = () => {
   // StatCard component for dashboard stats
@@ -188,8 +189,12 @@ const AdminDashboard = () => {
     setDateRange({ start: today, end: today });
   };
 
+  // Handlers for DateRangePicker
+  const handleStartDateChange = (value) => handleDateRangeChange('start', value);
+  const handleEndDateChange = (value) => handleDateRangeChange('end', value);
+
   return (
-    <div className="space-y-4 max-w-6xl mx-auto pb-10">
+    <div className="space-y-4 max-w-7xl mx-auto pb-10">
       {/* Navigation Tabs */}
       <AssistantManagerTabsNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
       
@@ -199,69 +204,23 @@ const AdminDashboard = () => {
           <ErrorMessage message={error} />
         ) : (
           <>
-            {/* Modern Filter Bar */}
-            <div className="bg-white p-4 rounded-xl shadow-md border border-slate-200 mb-4">
-              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4">
-                {/* Header Section */}
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-sm">
-                    <Funnel className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-800 leading-tight">Date Range Filter</h3>
-                    <p className="text-xs text-slate-500 font-medium">Select your preferred date range</p>
-                  </div>
-                </div>
-
-                {/* From Date */}
-                <div className="flex-1">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-1.5">
-                    <Calendar className="w-3 h-3 text-blue-600" />
-                    From
-                  </label>
-                  <input
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => handleDateRangeChange('start', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-medium rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white"
-                  />
-                </div>
-
-                {/* To Date */}
-                <div className="flex-1">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-1.5">
-                    <Calendar className="w-3 h-3 text-blue-600" />
-                    To
-                  </label>
-                  <input
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => handleDateRangeChange('end', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-medium rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white"
-                  />
-                </div>
-
-                {/* Reset Button */}
-                <div className="flex-shrink-0">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-1.5 opacity-0">
-                    Action
-                  </label>
-                  <button
-                    onClick={handleClearFilter}
-                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg px-6 py-2.5 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 group"
-                  >
-                    <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
-                    Reset to Today
-                  </button>
-                </div>
-              </div>
-            </div>
+            {/* Date Range Filter */}
+            <DateRangePicker
+              startDate={dateRange.start}
+              endDate={dateRange.end}
+              onStartDateChange={handleStartDateChange}
+              onEndDateChange={handleEndDateChange}
+              onClear={handleClearFilter}
+              label="Date Range Filter"
+              description="Select your preferred date range"
+              showClearButton={true}
+            />
             
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-[120px]">
               <StatCard
                 icon={Users}
-                title="Total Agents"
+                title="Total Active Agents"
                 value={loading ? "..." : stats.totalAgents}
                 subtext="Active team members"
                 trend="neutral"
@@ -430,7 +389,6 @@ const AdminDashboard = () => {
       {/* Billable Report Tab */}
       {activeTab === 'billable_report' && (
         <div className="max-w-7xl mx-auto mt-6">
-          <h2 className="text-2xl font-bold text-blue-700 mb-4">Billable Report</h2>
           <BillableReport />
         </div>
       )}

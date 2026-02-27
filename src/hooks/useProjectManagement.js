@@ -176,11 +176,11 @@
 
 // useProjectManagement.js
 import { useState } from 'react';
-import { addTask, createProject, updateProject, deleteProject, updateTask, deleteTask as deleteTaskApi } from '../services/projectService';
+import { addTask, createProject, updateProject, deleteProject, updateTask, deleteTask as deleteTaskApi, fetchProjectsList } from '../services/projectService';
 import { toast } from "react-hot-toast";
 import { useDeviceInfo } from "./useDeviceInfo";
 
-export const useProjectManagement = (initialProjects, onUpdateProjects, loadProjects) => {
+export const useProjectManagement = (initialProjects, onUpdateProjects, loadProjects, userId) => {
      const deviceInfo = useDeviceInfo();
      const [newProject, setNewProject] = useState({
           name: '',
@@ -190,6 +190,7 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
           assistantManagerIds: [],
           qaManagerIds: [],
           teamIds: [],
+          // projectCategoryId: '',
      });
 
      const [projectFiles, setProjectFiles] = useState([]);
@@ -243,14 +244,22 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                formData.append('project_description', newProject.description?.trim() || '');
                formData.append('project_manager_id', Number(newProject.projectManagerId));
                
+               // Append project category if selected
+               // if (newProject.projectCategoryId) {
+               //      formData.append('project_category_id', Number(newProject.projectCategoryId));
+               // }
+               
                // Append array fields as JSON strings (backend expects this format)
                formData.append('asst_project_manager_id', JSON.stringify(newProject.assistantManagerIds.map(id => Number(id))));
                formData.append('project_qa_id', JSON.stringify(newProject.qaManagerIds.map(id => Number(id))));
                formData.append('project_team_id', JSON.stringify(newProject.teamIds.map(id => Number(id))));
                
-               // Append file if exists
+               // Append all files
                if (projectFiles && projectFiles.length > 0) {
-                    formData.append('file', projectFiles[0]);
+                    console.log('[AddProject] Appending files:', projectFiles.length, projectFiles);
+                    projectFiles.forEach((file) => {
+                         formData.append('file', file);
+                    });
                }
                
                // Append device info
@@ -298,8 +307,32 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
      };
 
      // Add function to open edit modal with project data
-     const openEditModal = (project) => {
+     const openEditModal = async (project) => {
           if (!project) return;
+          
+          try {
+               // Fetch the full project details including project_category_name and project_files
+               if (userId && project.project_id) {
+                    const response = await fetchProjectsList(userId);
+                    const fullProject = response.data?.find(p => p.project_id === project.project_id);
+                    
+                    if (fullProject) {
+                         console.log('[openEditModal] Full project from API:', fullProject);
+                         console.log('[openEditModal] project_files:', fullProject.project_files);
+                         // Use the full project data from API
+                         project = {
+                              ...project,
+                              project_category_name: fullProject.project_category_name,
+                              project_category_id: fullProject.project_category_id,
+                              project_files: fullProject.project_files
+                         };
+                    }
+               }
+          } catch (error) {
+               console.error('[openEditModal] Error fetching project details:', error);
+               toast.error('Failed to load project details');
+          }
+          
           // Map API project fields to newProject state for editing
           setNewProject({
                name: project.name || project.project_name || '',
@@ -308,23 +341,42 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                projectManagerId: String(project.projectManagerId || project.project_manager_id || ''),
                assistantManagerIds: (project.assistantManagerIds
                     ? project.assistantManagerIds.map(String)
-                    : project.asst_project_managers?.map(u => String(u.user_id)) || []),
+                    : project.asst_project_managers?.map(u => String(u.user_id)) || project.asst_project_manager_id?.map(String) || []),
                qaManagerIds: (project.qaManagerIds
                     ? project.qaManagerIds.map(String)
-                    : project.qa_users?.map(u => String(u.user_id)) || []),
+                    : project.qa_users?.map(u => String(u.user_id)) || project.project_qa_id?.map(String) || []),
                teamIds: (project.teamIds
                     ? project.teamIds.map(String)
-                    : project.project_team?.map(u => String(u.user_id)) || []),
+                    : project.project_team?.map(u => String(u.user_id)) || project.project_team_id?.map(String) || []),
+               // projectCategoryId: String(project.projectCategoryId || project.project_category_id || ''),
+               // projectCategoryName: project.project_category_name || '',
           });
-          // Patch: Set projectFiles as an array with a dummy File-like object if project.project_file exists
-          if (project.project_file) {
-               setProjectFiles([
-                    {
-                         name: project.project_file,
-                         // Optionally add type and size if available, else use defaults
+          
+          // Set projectFiles from project.project_files array (URLs)
+          console.log('[openEditModal] Setting project files from:', project.project_files);
+          if (project.project_files && Array.isArray(project.project_files) && project.project_files.length > 0) {
+               const existingFiles = project.project_files.map((fileUrl, index) => {
+                    const fileName = fileUrl.split('/').pop() || `File ${index + 1}`;
+                    return {
+                         name: fileName,
+                         url: fileUrl,
+                         isExisting: true,
                          type: '',
                          size: 0,
-                         // Add a preview or url if you want to support download/view
+                    };
+               });
+               console.log('[openEditModal] Setting existingFiles:', existingFiles);
+               setProjectFiles(existingFiles);
+          } else if (project.project_file) {
+               // Fallback for singular project_file field
+               const fileName = project.project_file.split('/').pop() || 'project-file';
+               setProjectFiles([
+                    {
+                         name: fileName,
+                         url: project.project_file,
+                         isExisting: true,
+                         type: '',
+                         size: 0,
                     }
                ]);
           } else {
@@ -384,29 +436,88 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                formData.append('project_description', projectData.description?.trim() || '');
                formData.append('project_manager_id', Number(projectData.projectManagerId));
                
+               // Append project category if provided
+               // if (projectData.projectCategoryId) {
+               //      formData.append('project_category_id', Number(projectData.projectCategoryId));
+               // }
+               
                // Append array fields as JSON strings (backend expects this format)
                formData.append('asst_project_manager_id', JSON.stringify(projectData.assistantManagerIds.map(id => Number(id))));
                formData.append('project_qa_id', JSON.stringify(projectData.qaManagerIds.map(id => Number(id))));
                formData.append('project_team_id', JSON.stringify(projectData.teamIds.map(id => Number(id))));
                
-               // Append file if exists (only if user selected a new file, not existing)
+               // Process ALL files - both existing (to keep) and new (to upload)
+               const existingFileUrls = [];
+               const newFilesToUpload = [];
+               
+               console.log('[UpdateProject] ========== FILE PROCESSING START ==========');
+               console.log('[UpdateProject] Total projectFiles:', projectFiles?.length || 0);
+               
                if (projectFiles && projectFiles.length > 0) {
-                    // Check if it's a real File object (new upload) vs existing file metadata
-                    const file = projectFiles[0];
-                    if (file instanceof File) {
-                         formData.append('file', file);
-                    }
+                    projectFiles.forEach((file, index) => {
+                         console.log(`[UpdateProject] File ${index}:`, {
+                              name: file.name,
+                              isFile: file instanceof File,
+                              isExisting: file.isExisting,
+                              hasUrl: !!file.url,
+                              url: file.url
+                         });
+                         
+                         // Check if it's a real File object (new upload) vs existing file metadata
+                         if (file instanceof File) {
+                              console.log(`[UpdateProject] ✓ New file to upload: ${file.name}`);
+                              newFilesToUpload.push(file);
+                         } else if (file.isExisting && file.url) {
+                              console.log(`[UpdateProject] ✓ Existing file to keep: ${file.url}`);
+                              existingFileUrls.push(file.url);
+                         } else {
+                              console.warn(`[UpdateProject] ⚠️ File not categorized:`, file);
+                         }
+                    });
                }
+               
+               const totalFiles = existingFileUrls.length + newFilesToUpload.length;
+               console.log('[UpdateProject] SUMMARY:');
+               console.log('[UpdateProject] - Total files after update:', totalFiles);
+               console.log('[UpdateProject] - Existing files to keep:', existingFileUrls.length, existingFileUrls);
+               console.log('[UpdateProject] - New files to upload:', newFilesToUpload.length);
+               console.log('[UpdateProject] ========== FILE PROCESSING END ==========');
+               
+               // Send existing file URLs (files to keep) as JSON array
+               formData.append('existing_files', JSON.stringify(existingFileUrls));
+               
+               // Append all new files to upload
+               if (newFilesToUpload.length > 0) {
+                    console.log('[UpdateProject] Appending new files to FormData...');
+                    newFilesToUpload.forEach((file, idx) => {
+                         console.log(`[UpdateProject] Adding file[${idx}]:`, file.name);
+                         formData.append('file', file);
+                    });
+               }
+               
+               // Log the complete file operation
+               console.log('[UpdateProject] Final file configuration:');
+               console.log(`[UpdateProject] - Will keep ${existingFileUrls.length} existing file(s)`);
+               console.log(`[UpdateProject] - Will upload ${newFilesToUpload.length} new file(s)`);
+               console.log(`[UpdateProject] - Final total: ${totalFiles} file(s)`);
                
                // Append device info
                formData.append('device_id', deviceInfo.device_id);
                formData.append('device_type', deviceInfo.device_type);
                
-               // Debug log
-               console.log('[UpdateProject] FormData entries:');
+               // Debug log - Show ALL FormData entries
+               console.log('[UpdateProject] ========== FORMDATA TO BE SENT ==========');
+               console.log('[UpdateProject] Project ID:', editingProjectId);
+               const formDataEntries = {};
                for (let pair of formData.entries()) {
-                    console.log(pair[0], pair[1]);
+                    if (pair[1] instanceof File) {
+                         formDataEntries[pair[0]] = `[File: ${pair[1].name}]`;
+                    } else {
+                         formDataEntries[pair[0]] = pair[1];
+                    }
                }
+               console.log('[UpdateProject] FormData contents:', JSON.stringify(formDataEntries, null, 2));
+               console.log('[UpdateProject] ========================================');
 
                const response = await updateProject(editingProjectId, formData);
 
@@ -537,18 +648,30 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                return false;
           }
 
-          const payload = {
-               project_id: projectId,
-               task_team_id: teamIds.map(id => Number(id)),
-               task_name: name,
-               task_description: taskPayload?.description?.trim() || "",
-               task_target: String(target),
-               device_id: deviceInfo.device_id,
-               device_type: deviceInfo.device_type,
-          };
+          // Create FormData for file upload support
+          const formData = new FormData();
+          formData.append('project_id', Number(projectId));
+          formData.append('task_name', name);
+          formData.append('task_description', taskPayload?.description?.trim() || "");
+          formData.append('task_target', String(target));
+          formData.append('device_id', deviceInfo.device_id);
+          formData.append('device_type', deviceInfo.device_type);
+          
+          // Append team IDs as JSON array
+          formData.append('task_team_id', JSON.stringify(teamIds.map(id => Number(id))));
+          
+          // Append important columns if provided
+          if (taskPayload?.importantColumns && taskPayload.importantColumns.length > 0) {
+               formData.append('important_columns', JSON.stringify(taskPayload.importantColumns));
+          }
+          
+          // Append file if provided
+          if (taskPayload?.file) {
+               formData.append('task_file', taskPayload.file);
+          }
 
           try {
-               const response = await addTask(payload);
+               const response = await addTask(formData);
 
                if (response?.status === 200 || response?.status === 201) {
                     toast.success("Task added successfully", {
@@ -589,19 +712,31 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                return false;
           }
 
-          const payload = {
-               project_id: projectId,
-               task_id: taskId,
-               task_team_id: teamIds.map(id => Number(id)),
-               task_name: name,
-               task_description: taskPayload?.description?.trim() || "",
-               task_target: String(target),
-               device_id: deviceInfo.device_id,
-               device_type: deviceInfo.device_type,
-          };
+          // Create FormData for file upload support
+          const formData = new FormData();
+          formData.append('project_id', Number(projectId));
+          formData.append('task_id', Number(taskId));
+          formData.append('task_name', name);
+          formData.append('task_description', taskPayload?.description?.trim() || "");
+          formData.append('task_target', String(target));
+          formData.append('device_id', deviceInfo.device_id);
+          formData.append('device_type', deviceInfo.device_type);
+          
+          // Append team IDs as JSON array
+          formData.append('task_team_id', JSON.stringify(teamIds.map(id => Number(id))));
+          
+          // Append important columns if provided
+          if (taskPayload?.importantColumns && taskPayload.importantColumns.length > 0) {
+               formData.append('important_columns', JSON.stringify(taskPayload.importantColumns));
+          }
+          
+          // Append file if provided (new file to replace existing)
+          if (taskPayload?.file) {
+               formData.append('task_file', taskPayload.file);
+          }
 
           try {
-               const response = await updateTask(payload);
+               const response = await updateTask(formData);
 
                if (response?.status === 200 || response?.status === 201) {
                     toast.success("Task updated successfully", {
@@ -631,7 +766,12 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
           if (!taskId) return false;
 
           try {
-               const response = await deleteTaskApi({ project_id: projectId, task_id: taskId });
+               const response = await deleteTaskApi({ 
+                    project_id: projectId, 
+                    task_id: taskId,
+                    device_id: deviceInfo.deviceId || 'web',
+                    device_type: deviceInfo.deviceType || 'Laptop'
+               });
 
                if (response?.status === 200 || response?.status === 201) {
                     toast.success("Task deleted successfully", {
@@ -666,6 +806,7 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
                assistantManagerIds: [],
                qaManagerIds: [],
                teamIds: [],
+               // projectCategoryId: '',
           });
           setProjectFiles([]);
           setFormErrors({});
@@ -713,13 +854,19 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
      };
 
      const handleRemoveProjectFile = (index) => {
-          setProjectFiles(prev => prev.filter((_, i) => i !== index));
+          console.log('[handleRemoveProjectFile] Removing file at index:', index);
+          setProjectFiles(prev => {
+               console.log('[handleRemoveProjectFile] Current files before removal:', prev);
+               const updated = prev.filter((_, i) => i !== index);
+               console.log('[handleRemoveProjectFile] Files after removal:', updated);
+               return updated;
+          });
      };
 
      // Add modal close handler
      const handleModalClose = () => {
           resetNewProjectForm();
-          setProjectFiles(null);
+          setProjectFiles([]);
           setFormErrors({});
      };
 
@@ -741,6 +888,7 @@ export const useProjectManagement = (initialProjects, onUpdateProjects, loadProj
           handleDeleteProject,
           handleUpdateProjectField,
           handleAddTask,
+          handleUpdateTask,
           handleDeleteTask,
           resetNewProjectForm,
           clearFieldError,

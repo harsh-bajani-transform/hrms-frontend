@@ -13,7 +13,7 @@ import DeleteUserModal from "./DeleteUserModal";
 import { deleteUser } from "../../../../services/authService";
 import LoadingSpinner from "../../../common/LoadingSpinner";
 import ErrorMessage from "../../../common/ErrorMessage";
-import CustomSelect from "../../../common/CustomSelect";
+import SearchableSelect from "../../../common/SearchableSelect";
 import config from "../../../../config/environment";
 import { log, logError } from "../../../../config/environment";
 
@@ -665,7 +665,7 @@ const UsersManagement = ({
                               <label className="block text-sm font-semibold text-slate-700 mb-2">
                                    Assistant Manager
                               </label>
-                              <CustomSelect
+                              <SearchableSelect
                                    value={filterUser.reportingManager}
                                    onChange={(value) => setFilterUser({ ...filterUser, reportingManager: value })}
                                    options={[
@@ -683,7 +683,7 @@ const UsersManagement = ({
                               <label className="block text-sm font-semibold text-slate-700 mb-2">
                                    Role
                               </label>
-                              <CustomSelect
+                              <SearchableSelect
                                    value={filterUser.role}
                                    onChange={(value) => setFilterUser({ ...filterUser, role: value })}
                                    options={[

@@ -14,6 +14,7 @@ const AddProjectForm = ({
      assistantManagers = [],
      qaManagers = [],
      teams = [],
+     projectCategories = [],
      loadDropdowns,
      formErrors = {},
      clearFieldError,
@@ -92,6 +93,7 @@ const AddProjectForm = ({
                               assistantManagers={assistantManagers || []}
                               qaManagers={qaManagers || []}
                               teams={teams || []}
+                              projectCategories={projectCategories || []}
                               formErrors={formErrors}
                               clearFieldError={clearFieldError}
                               isSubmitting={isSubmitting}

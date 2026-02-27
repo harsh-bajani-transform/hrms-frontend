@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { toast } from "react-hot-toast";
 import { User, Download, ChevronUp, Calendar, X, RotateCcw, Edit, Plus } from "lucide-react";
 import DailyEntryFormModal from "./DailyEntryFormModal";
+import { DateRangePicker } from "./CustomCalendar";
 
 function formatDateTime(dt) {
   if (!dt) return '-';
@@ -27,7 +28,9 @@ export default function UserCard({
   expanded: controlledExpanded,
   onToggleExpand = () => {},
   selectedMonth = '',
-  onRefresh = () => {}
+  onRefresh = () => {},
+  team_name = '',
+  showTeam = false
 }) {
   const role = useCurrentUserRole();
   const { user: currentUser } = useAuth();
@@ -37,6 +40,24 @@ export default function UserCard({
   
   // Check if user is Assistant Manager (role_id = 4) or QA Agent (role_id = 5)
   const canSeeActions = roleId === 4 || roleId === 5 || role === "ASSISTANT_MANAGER" || role === "QA_AGENT";
+  
+  // Helper function to get QC score color classes
+  const getQCScoreColorClass = (score) => {
+    if (score === null || score === undefined || score === '-' || isNaN(Number(score))) return 'text-slate-700';
+    const numScore = Number(score);
+    if (numScore >= 98) return 'text-green-700 bg-green-50 font-bold';
+    if (numScore >= 95) return 'text-orange-600 bg-orange-50 font-semibold';
+    return 'text-red-800 bg-red-100 font-bold';
+  };
+
+  // Helper function to get tracker count color classes
+  const getTrackerCountColorClass = (count) => {
+    if (count === null || count === undefined || count === '-' || isNaN(Number(count))) return 'text-slate-700';
+    const numCount = Number(count);
+    if (numCount >= 9) return 'text-green-700 bg-green-50 font-bold';
+    if (numCount >= 7) return 'text-orange-600 bg-orange-50 font-semibold';
+    return 'text-red-800 bg-red-100 font-bold';
+  };
   
   // Helper function to get month's first and last day
   const getMonthDateRange = (monthStr) => {
@@ -73,8 +94,6 @@ export default function UserCard({
   const monthRange = getMonthDateRange(selectedMonth);
   const [start, setStart] = useState(monthRange.start);
   const [end, setEnd] = useState(monthRange.end);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
 
   // Modal state
   const [showEntryModal, setShowEntryModal] = useState(false);
@@ -127,29 +146,6 @@ export default function UserCard({
     return true;
   });
 
-  // Convert yyyy-mm-dd to dd/mm/yyyy for display
-  const formatToDisplay = (dateStr) => {
-    if (!dateStr) return '';
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
-  // Convert dd/mm/yyyy to yyyy-mm-dd for storage
-  const formatToStorage = (day, month, year) => {
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
-  // Handle date selection from custom calendar
-  const handleDateSelect = (name, dateValue) => {
-    if (name === 'start') {
-      setStart(dateValue);
-      setShowStartPicker(false);
-    } else {
-      setEnd(dateValue);
-      setShowEndPicker(false);
-    }
-  };
-
   // Handle Add button click
   const handleAddClick = (rowData = null) => {
     setModalMode('add');
@@ -189,94 +185,6 @@ export default function UserCard({
     setModalMode('add');
   };
 
-  // Generate calendar days
-  const generateCalendar = (currentDate) => {
-    const date = currentDate ? new Date(currentDate) : new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
-    return { year, month, daysInMonth, startingDayOfWeek: firstDayOfMonth };
-  };
-
-  // Custom Date Picker Component
-  const CustomDatePicker = ({ name, value, onSelect, show, onClose }) => {
-    const [viewDate, setViewDate] = useState(value || new Date().toISOString().split('T')[0]);
-    const { year, month, daysInMonth, startingDayOfWeek } = generateCalendar(viewDate);
-    
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-    const handlePrevMonth = () => {
-      const newDate = new Date(year, month - 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    const handleNextMonth = () => {
-      const newDate = new Date(year, month + 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    if (!show) return null;
-
-    return (
-      <div className="absolute z-[100] mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64 max-h-[320px] overflow-visible">
-        {/* Month/Year Header */}
-        <div className="flex items-center justify-between mb-3">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="font-bold text-sm text-slate-800">{monthNames[month]} {year}</span>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map(day => (
-            <div key={day} className="text-center text-xs font-bold text-slate-600">{day}</div>
-          ))}
-        </div>
-
-        {/* Calendar Days */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = formatToStorage(day, month + 1, year);
-            const isSelected = dateStr === value;
-            return (
-              <button
-                key={day}
-                onClick={() => onSelect(name, dateStr)}
-                className={`text-xs p-1.5 rounded hover:bg-blue-100 transition-colors ${
-                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
-                }`}
-              >
-                {day}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Close Button */}
-        <button 
-          type="button"
-          onClick={onClose}
-          className="w-full mt-3 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Return
-        </button>
-      </div>
-    );
-  };
-
   // AGENT: Only show the table, no card, header, or controls
   if (role === "AGENT") {
     return (
@@ -301,8 +209,16 @@ export default function UserCard({
                 <td className="px-6 py-4 text-slate-900 font-medium whitespace-nowrap">{row.date_time || row.date || row.work_date || '-'}</td>
                 <td className="px-6 py-4 text-center text-slate-700 font-semibold">{row.assigned_hours !== null && row.assigned_hours !== undefined ? Number(row.assigned_hours).toFixed(2) : '-'}</td>
                 <td className="px-6 py-4 text-center text-slate-700 font-semibold">{row.billable_hours || row.total_billable_hours_day ? Number(row.billable_hours || row.total_billable_hours_day).toFixed(2) : '-'}</td>
-                <td className="px-6 py-4 text-center text-slate-700 font-semibold">{row.qc_score !== null && row.qc_score !== undefined ? Number(row.qc_score).toFixed(2) : '-'}</td>
-                <td className="px-6 py-4 text-center text-slate-700">{row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-'}</td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-2 py-1 rounded-lg inline-block ${getQCScoreColorClass(row.qc_score)}`}>
+                    {row.qc_score !== null && row.qc_score !== undefined ? Number(row.qc_score).toFixed(2) : '-'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-2 py-1 rounded-lg inline-block ${getTrackerCountColorClass(row.trackers_count_day)}`}>
+                    {row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-'}
+                  </span>
+                </td>
                 <td className="px-6 py-4 text-center text-slate-700">{row.tenure_target || row.daily_required_hours ? Number(row.tenure_target || row.daily_required_hours).toFixed(2) : '-'}</td>
                 {canSeeActions && (
                   <td className="px-6 py-4 text-center">
@@ -349,7 +265,9 @@ export default function UserCard({
           {/* User Info */}
           <div className="flex-1">
             <h3 className="text-xl font-bold text-slate-800 tracking-tight">{user.user_name}</h3>
-            {/* <p className="text-xs text-slate-500 font-medium mt-0.5">Team: {user.team_name || "B"}</p> */}
+            {showTeam && team_name && (
+              <p className="text-sm text-slate-600 font-medium mt-0.5">{team_name}</p>
+            )}
           </div>
           
           {/* Toggle Button */}
@@ -369,68 +287,41 @@ export default function UserCard({
         {/* Filter Section */}
         {expanded && (
           <div className="px-6 pb-5 pt-0">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible relative">
-              {/* Date Range Filter */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                  <label className="font-semibold text-sm">Date Range:</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      value={formatToDisplay(start)}
-                      readOnly
-                      className="border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-slate-50 cursor-pointer w-40"
-                      placeholder="dd/mm/yyyy"
-                      onClick={() => setShowStartPicker(!showStartPicker)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowStartPicker(!showStartPicker)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                    >
-                      <Calendar className="w-4 h-4 text-blue-600" />
-                    </button>
-                    <CustomDatePicker 
-                      name="start"
-                      value={start}
-                      onSelect={handleDateSelect}
-                      show={showStartPicker}
-                      onClose={() => setShowStartPicker(false)}
-                    />
+            {/* Date Range Card */}
+            <div className="bg-white p-4 rounded-xl shadow-md border-2 border-blue-100">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4">
+                {/* Icon and Title */}
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-sm">
+                    <Calendar className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-slate-400 font-medium">to</span>
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      value={formatToDisplay(end)}
-                      readOnly
-                      className="border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-slate-50 cursor-pointer w-40"
-                      placeholder="dd/mm/yyyy"
-                      onClick={() => setShowEndPicker(!showEndPicker)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowEndPicker(!showEndPicker)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                    >
-                      <Calendar className="w-4 h-4 text-blue-600" />
-                    </button>
-                    <CustomDatePicker 
-                      name="end"
-                      value={end}
-                      onSelect={handleDateSelect}
-                      show={showEndPicker}
-                      onClose={() => setShowEndPicker(false)}
-                    />
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800 leading-tight">Date Range Filter</h3>
                   </div>
                 </div>
-                {(start || end) && (
+                
+                {/* Date Range Picker - Using shadcn calendar */}
+                <div className="flex-1">
+                  <DateRangePicker
+                    startDate={start}
+                    endDate={end}
+                    onStartDateChange={setStart}
+                    onEndDateChange={setEnd}
+                    label=""
+                    description={null}
+                    showClearButton={false}
+                    compact={true}
+                    fieldWidth="220px"
+                    noWrapper={true}
+                  />
+                </div>
+                
+                {/* Action Buttons - Aligned with date fields */}
+                <div className="flex flex-wrap items-center gap-3 self-end">
+                  {/* Reset Button */}
                   <button
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg px-6 py-2.5 transition-all shadow-sm hover:shadow-md group"
-                    onClick={() => { 
+                    onClick={() => {
                       const newRange = getMonthDateRange(selectedMonth);
                       setStart(newRange.start);
                       setEnd(newRange.end);
@@ -438,79 +329,79 @@ export default function UserCard({
                     type="button"
                   >
                     <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
-                    Reset to Month
+                    Reset Filter
                   </button>
-                )}
-              </div>
-              
-              {/* Export Button */}
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  try {
-                    // Helper to safely format number or return '-'
-                    const formatNumber = (val) => {
-                      if (val === null || val === undefined || val === '' || val === '-') return '-';
-                      const num = Number(val);
-                      return isNaN(num) ? '-' : num.toFixed(2);
-                    };
-                    
-                    // Use filteredRows (already filtered by date range)
-                    let exportData = filteredRows.map(row => ({
-                      'Date': formatDateTime(row.date_time ?? row.date),
-                      'Assign Hours': formatNumber(row.assigned_hours ?? row.assign_hours ?? row.assignHours),
-                      'Worked Hours': formatNumber(row.billable_hours ?? row.workedHours ?? row.worked_hours),
-                      'QC Score': formatNumber(row.qc_score ?? row.qcScore),
-                      'Tracker Count': row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-',
-                      'Daily Required Hours': formatNumber(row.tenure_target ?? row.dailyRequiredHours ?? row.daily_required_hours)
-                    }));
-                    if (exportData.length > 0) {
-                      const totalAssigned = exportData.reduce((sum, r) => sum + (parseFloat(r['Assign Hours']) || 0), 0);
-                      const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
-                      const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
-                      const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
-                      const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+                  
+                  {/* Export Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      try {
+                      // Helper to safely format number or return '-'
+                      const formatNumber = (val) => {
+                        if (val === null || val === undefined || val === '' || val === '-') return '-';
+                        const num = Number(val);
+                        return isNaN(num) ? '-' : num.toFixed(2);
+                      };
                       
-                      const totalTrackers = exportData.reduce((sum, r) => {
-                        const count = r['Tracker Count'];
-                        return sum + (count !== '-' ? parseInt(count) : 0);
-                      }, 0);
-                      
-                      exportData.push({
-                        'Date': 'TOTAL',
-                        'Assign Hours': totalAssigned.toFixed(2),
-                        'Worked Hours': totalWorked.toFixed(2),
-                        'QC Score': avgQC,
-                        'Tracker Count': totalTrackers,
-                        'Daily Required Hours': totalRequired.toFixed(2)
-                      });
+                      // Use filteredRows (already filtered by date range)
+                      let exportData = filteredRows.map(row => ({
+                        'Date': formatDateTime(row.date_time ?? row.date),
+                        'Assign Hours': formatNumber(row.assigned_hours ?? row.assign_hours ?? row.assignHours),
+                        'Worked Hours': formatNumber(row.billable_hours ?? row.workedHours ?? row.worked_hours),
+                        'QC Score': formatNumber(row.qc_score ?? row.qcScore),
+                        'Tracker Count': row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-',
+                        'Daily Required Hours': formatNumber(row.tenure_target ?? row.dailyRequiredHours ?? row.daily_required_hours)
+                      }));
+                      if (exportData.length > 0) {
+                        const totalAssigned = exportData.reduce((sum, r) => sum + (parseFloat(r['Assign Hours']) || 0), 0);
+                        const totalWorked = exportData.reduce((sum, r) => sum + (parseFloat(r['Worked Hours']) || 0), 0);
+                        const totalRequired = exportData.reduce((sum, r) => sum + (parseFloat(r['Daily Required Hours']) || 0), 0);
+                        const qcScores = exportData.map(r => parseFloat(r['QC Score'])).filter(v => !isNaN(v));
+                        const avgQC = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length).toFixed(2) : '-';
+                        
+                        const totalTrackers = exportData.reduce((sum, r) => {
+                          const count = r['Tracker Count'];
+                          return sum + (count !== '-' ? parseInt(count) : 0);
+                        }, 0);
+                        
+                        exportData.push({
+                          'Date': 'TOTAL',
+                          'Assign Hours': totalAssigned.toFixed(2),
+                          'Worked Hours': totalWorked.toFixed(2),
+                          'QC Score': avgQC,
+                          'Tracker Count': totalTrackers,
+                          'Daily Required Hours': totalRequired.toFixed(2)
+                        });
+                      }
+                      const worksheet = XLSX.utils.json_to_sheet(exportData);
+                      worksheet['!cols'] = [
+                        { wch: 16 }, // Date
+                        { wch: 16 }, // Assign Hours
+                        { wch: 16 }, // Worked Hours
+                        { wch: 12 }, // QC Score
+                        { wch: 15 }, // Tracker Count
+                        { wch: 22 }  // Daily Required Hours
+                      ];
+                      const workbook = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(workbook, worksheet, user.user_name || 'User');
+                      const filename = `Daily_Report_${user.user_name || 'User'}_${start || 'all'}_${end || 'all'}.xlsx`;
+                      XLSX.writeFile(workbook, filename);
+                      toast.success('Daily report exported successfully!');
+                    } catch {
+                      toast.error('Failed to export daily report');
                     }
-                    const worksheet = XLSX.utils.json_to_sheet(exportData);
-                    worksheet['!cols'] = [
-                      { wch: 16 }, // Date
-                      { wch: 16 }, // Assign Hours
-                      { wch: 16 }, // Worked Hours
-                      { wch: 12 }, // QC Score
-                      { wch: 15 }, // Tracker Count
-                      { wch: 22 }  // Daily Required Hours
-                    ];
-                    const workbook = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(workbook, worksheet, user.user_name || 'User');
-                    const filename = `Daily_Report_${user.user_name || 'User'}_${start || 'all'}_${end || 'all'}.xlsx`;
-                    XLSX.writeFile(workbook, filename);
-                    toast.success('Daily report exported successfully!');
-                  } catch {
-                    toast.error('Failed to export daily report');
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 ml-auto"
-                title="Export filtered data"
-                aria-label="Export"
-                onMouseDown={e => e.stopPropagation()}
-              >
-                <Download className="w-4 h-4" />
-                Export
-              </button>
+                  }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+                    title="Export filtered data"
+                    aria-label="Export"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <Download className="w-4 h-4" />
+                    Export
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -545,11 +436,15 @@ export default function UserCard({
                       <td className="px-6 py-4 text-center text-blue-700 font-semibold">
                         {row.worked_hours === '-' || row.workedHours === '-' ? '-' : (row.billable_hours !== undefined && row.billable_hours !== null && !isNaN(Number(row.billable_hours)) ? Number(row.billable_hours).toFixed(2) : (row.worked_hours ?? row.workedHours ?? '-'))}
                       </td>
-                      <td className="px-6 py-4 text-center text-emerald-700 font-semibold">
-                        {row.qc_score === '-' || row.qcScore === '-' ? '-' : ('qc_score' in row ? (row.qc_score !== null && row.qc_score !== undefined && !isNaN(Number(row.qc_score)) ? Number(row.qc_score).toFixed(2) : '-') : (row.qcScore ?? '-'))}
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-2 py-1 rounded-lg inline-block ${getQCScoreColorClass(row.qc_score ?? row.qcScore)}`}>
+                          {row.qc_score === '-' || row.qcScore === '-' ? '-' : ('qc_score' in row ? (row.qc_score !== null && row.qc_score !== undefined && !isNaN(Number(row.qc_score)) ? Number(row.qc_score).toFixed(2) : '-') : (row.qcScore ?? '-'))}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 text-center text-slate-700">
-                        {row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-'}
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-2 py-1 rounded-lg inline-block ${getTrackerCountColorClass(row.trackers_count_day)}`}>
+                          {row.trackers_count_day !== null && row.trackers_count_day !== undefined ? row.trackers_count_day : '-'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-center text-slate-700">
                         {row.daily_required_hours === '-' || row.dailyRequiredHours === '-' ? '-' : (row.tenure_target !== undefined && row.tenure_target !== null && !isNaN(Number(row.tenure_target)) ? Number(row.tenure_target).toFixed(2) : (row.daily_required_hours ?? row.dailyRequiredHours ?? '-'))}
