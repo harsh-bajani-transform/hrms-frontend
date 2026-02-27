@@ -658,7 +658,7 @@ const UserMonthlyReport = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-white">User Monthly Report</h2>
+        <h2 className="text-2xl font-bold text-white">User Monthly Goal</h2>
         <p className="text-blue-100 text-sm mt-1">Manage monthly targets for users</p>
       </div>
 
