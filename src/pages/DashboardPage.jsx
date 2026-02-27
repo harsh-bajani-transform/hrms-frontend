@@ -263,7 +263,7 @@ const DashboardPage = ({
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-10">
+    <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* Debug: Show current active tab */}
       {console.log('[DashboardPage Render] activeTab:', activeTab)}
 
@@ -329,22 +329,32 @@ const DashboardPage = ({
 
 
 
-
-      {/* Billable Report Card - only show when tab is active (tab id is 'bookings') for non-agent roles */}
-      {activeTab === 'bookings' && !isAgent && (
-        (isQA || isAssistantManager || isProjectManager || isAdmin || isSuperAdmin) ? (
-          <div className="max-w-7xl mx-auto mt-6">
-            <h2 className="text-2xl font-bold text-blue-700 mb-4">Billable Report</h2>
-            <BillableReportCommon />
-          </div>
-        ) : null
-      )}
-
       {/* Agent Billable Report tab and view */}
       {activeTab === 'billable_report' && isAgent && (
-        <div className="max-w-7xl mx-auto mt-6">
-          <h2 className="text-2xl font-bold text-blue-700 mb-4">Billable Report</h2>
-          <AgentBillableReport />
+        <div className="max-w-7xl mx-auto mt-2">
+          {/* Navigation Tab Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-2 mb-2">
+            {/* Tab navigation bar component or markup here */}
+            {/* If AgentBillableReport renders the tab bar, you may need to move it out and render here instead */}
+          </div>
+          {/* Filter and Table Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <AgentBillableReport hideTabBar />
+          </div>
+        </div>
+      )}
+
+      {/* User Monthly Report tab and view for Assistant Manager */}
+      {activeTab === 'user_monthly_report' && isAssistantManager && (
+        <div className="max-w-7xl mx-auto mt-2">
+          {/* Navigation Tab Card */}
+          <AssistantManagerTabsNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+          {/* Gap between cards */}
+          <div className="h-4" />
+          {/* Filter and Table Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <UserMonthlyReport />
+          </div>
         </div>
       )}
 

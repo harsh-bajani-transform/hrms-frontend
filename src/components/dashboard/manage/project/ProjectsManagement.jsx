@@ -17,9 +17,11 @@ const normalizeDropdown = (arr, type = 'user') => {
   return arr.map(item => {
     if (Array.isArray(item) && item.length > 0) item = item[0];
     return {
-      id: item.user_id || item.team_id || item.id,
-      user_id: item.user_id || item.team_id || item.id,
+      id: item.project_category_id ?? item.afd_id ?? item.user_id ?? item.team_id ?? item.id,
+      user_id: item.user_id ?? item.team_id ?? item.id,
       team_id: item.team_id,
+      afd_id: item.afd_id,
+      project_category_id: item.project_category_id,
       label: item.label || item.name || item.user_name || item.team_name || '',
       name: item.name || item.label || item.user_name || item.team_name || '',
     };
@@ -75,7 +77,7 @@ const ProjectsManagement = ({
     closeEditModal,
     openDeleteModal,
     closeDeleteModal,
-  } = useProjectManagement(projects, onUpdateProjects, loadProjects);
+  } = useProjectManagement(projects, onUpdateProjects, loadProjects, user?.user_id);
 
   // Only show if user has permission to edit projects
   if (!canManageProjects && !isSuperAdmin && !isAdmin) {
@@ -191,17 +193,20 @@ const ProjectsManagement = ({
   const normalizedAssistantManagers = normalizeDropdown(dropdowns.assistantManagers);
   const normalizedQaManagers = normalizeDropdown(dropdowns.qas);
   const normalizedTeams = normalizeDropdown(dropdowns.agents, 'team');
+  const normalizedProjectCategories = normalizeDropdown(dropdowns.projectCategories);
   
   console.log('[ProjectsManagement] ===== NORMALIZED DROPDOWNS =====');
   console.log('[ProjectsManagement] Raw dropdowns.projectManagers:', dropdowns.projectManagers);
   console.log('[ProjectsManagement] Raw dropdowns.assistantManagers:', dropdowns.assistantManagers);
   console.log('[ProjectsManagement] Raw dropdowns.qas:', dropdowns.qas);
   console.log('[ProjectsManagement] Raw dropdowns.agents:', dropdowns.agents);
+  console.log('[ProjectsManagement] Raw dropdowns.projectCategories:', dropdowns.projectCategories);
   console.log('[ProjectsManagement] Normalized:');
   console.log('  - projectManagers:', normalizedProjectManagers);
   console.log('  - assistantManagers:', normalizedAssistantManagers);
   console.log('  - qaManagers:', normalizedQaManagers);
   console.log('  - teams:', normalizedTeams);
+  console.log('  - projectCategories:', normalizedProjectCategories);
 
   // Expanded state for each project card
   const [expandedCards, setExpandedCards] = React.useState({});
@@ -273,6 +278,7 @@ const ProjectsManagement = ({
                 assistantManagers={normalizedAssistantManagers}
                 qaManagers={normalizedQaManagers}
                 teams={normalizedTeams}
+                projectCategories={normalizedProjectCategories}
                 loadDropdowns={loadDropdowns}
                 dropdownLoading={dropdownLoading}
                 isSubmitting={isSubmitting}
@@ -299,6 +305,7 @@ const ProjectsManagement = ({
           assistantManagers={normalizedAssistantManagers}
           qaManagers={normalizedQaManagers}
           teams={normalizedTeams}
+          projectCategories={normalizedProjectCategories}
           formErrors={formErrors}
           isSubmitting={isSubmitting}
           handleProjectFilesChange={handleProjectFilesChange}

@@ -8,8 +8,9 @@
  */
 
 import React, { useRef, useState, useEffect } from "react";
-import { UserPlus, X, Upload, XCircle, User, Eye, EyeOff, ChevronDown } from "lucide-react";
-import CustomSelect from "../../../common/CustomSelect";
+import { UserPlus, X, Upload, XCircle, User, Eye, EyeOff, ChevronDown, Users } from "lucide-react";
+import SearchableSelect from "../../../common/SearchableSelect";
+import MultiSelectWithCheckbox from "../../../common/MultiSelectWithCheckbox";
 
 const AddUserFormModal = ({
      newUser,
@@ -35,10 +36,6 @@ const AddUserFormModal = ({
 }) => {
      // Reference for the hidden file input to trigger it via a custom button
      const fileInputRef = useRef(null);
-     // Refs for dropdown containers to detect click-outside
-     const pmDropdownRef = useRef(null);
-     const amDropdownRef = useRef(null);
-     const qaDropdownRef = useRef(null);
      // Local state to track the name of the uploaded file for UI feedback
      const [fileName, setFileName] = useState("");
      // Local validation errors for live validation
@@ -47,12 +44,6 @@ const AddUserFormModal = ({
      const [submitAttempted, setSubmitAttempted] = useState(false);
      // Track password visibility
      const [showPassword, setShowPassword] = useState(false);
-     // Track dropdown open state for multi-select
-     const [dropdownOpen, setDropdownOpen] = useState({
-          projectManagers: false,
-          assistantManagers: false,
-          qualityAnalysts: false
-     });
 
      /**
       * Role-based field visibility configuration
@@ -141,58 +132,6 @@ const AddUserFormModal = ({
                body.style.width = '';
                body.style.overflowY = '';
                window.scrollTo(0, scrollY);
-          };
-     }, []);
-
-     // Handle click outside to close dropdowns
-     useEffect(() => {
-          const handleClickOutside = (event) => {
-               // Check if click is outside PM dropdown
-               if (pmDropdownRef.current && !pmDropdownRef.current.contains(event.target)) {
-                    setDropdownOpen(prev => ({ ...prev, projectManagers: false }));
-               }
-               // Check if click is outside AM dropdown
-               if (amDropdownRef.current && !amDropdownRef.current.contains(event.target)) {
-                    setDropdownOpen(prev => ({ ...prev, assistantManagers: false }));
-               }
-               // Check if click is outside QA dropdown
-               if (qaDropdownRef.current && !qaDropdownRef.current.contains(event.target)) {
-                    setDropdownOpen(prev => ({ ...prev, qualityAnalysts: false }));
-               }
-          };
-
-          // Add event listener
-          document.addEventListener('mousedown', handleClickOutside);
-          
-          // Cleanup
-          return () => {
-               document.removeEventListener('mousedown', handleClickOutside);
-          };
-     }, []);
-
-     // Handle click outside to close dropdowns
-     useEffect(() => {
-          const handleClickOutside = (event) => {
-               // Check if click is outside PM dropdown
-               if (pmDropdownRef.current && !pmDropdownRef.current.contains(event.target)) {
-                    setDropdownOpen(prev => ({ ...prev, projectManagers: false }));
-               }
-               // Check if click is outside AM dropdown
-               if (amDropdownRef.current && !amDropdownRef.current.contains(event.target)) {
-                    setDropdownOpen(prev => ({ ...prev, assistantManagers: false }));
-               }
-               // Check if click is outside QA dropdown
-               if (qaDropdownRef.current && !qaDropdownRef.current.contains(event.target)) {
-                    setDropdownOpen(prev => ({ ...prev, qualityAnalysts: false }));
-               }
-          };
-
-          // Add event listener
-          document.addEventListener('mousedown', handleClickOutside);
-          
-          // Cleanup
-          return () => {
-               document.removeEventListener('mousedown', handleClickOutside);
           };
      }, []);
 
@@ -436,67 +375,6 @@ const AddUserFormModal = ({
      };
 
      /**
-      * Multi-select helper functions
-      */
-     const toggleDropdown = (dropdown) => {
-          setDropdownOpen(prev => ({
-               ...prev,
-               [dropdown]: !prev[dropdown]
-          }));
-     };
-
-     const handleMultipleSelect = (field, userId, isChecked) => {
-          const currentValues = newUser[field] || [];
-          const normalizedUserId = String(userId);
-          let updatedValues;
-          
-          if (isChecked) {
-               if (!currentValues.includes(normalizedUserId)) {
-                    updatedValues = [...currentValues, normalizedUserId];
-               } else {
-                    updatedValues = currentValues;
-               }
-          } else {
-               updatedValues = currentValues.filter(id => String(id) !== normalizedUserId);
-          }
-          
-          setNewUser(prev => ({ ...prev, [field]: updatedValues }));
-          
-          // Clear error when user makes a selection
-          if (updatedValues.length > 0) {
-               clearFieldError(field);
-               const updatedErrors = { ...liveErrors };
-               delete updatedErrors[field];
-               setLiveErrors(updatedErrors);
-          }
-     };
-
-     const handleRemoveSelection = (field, userId) => {
-          const currentValues = newUser[field] || [];
-          const updatedValues = currentValues.filter(id => String(id) !== String(userId));
-          setNewUser(prev => ({ ...prev, [field]: updatedValues }));
-     };
-
-     const handleSelectAll = (field, allOptions, isChecked) => {
-          if (isChecked) {
-               // Select all options
-               const allIds = allOptions.map(option => String(option.user_id));
-               setNewUser(prev => ({ ...prev, [field]: allIds }));
-          } else {
-               // Deselect all options
-               setNewUser(prev => ({ ...prev, [field]: [] }));
-          }
-          
-          // Clear error when user makes a selection
-          if (isChecked) {
-               clearFieldError(field);
-               const updatedErrors = { ...liveErrors };
-               delete updatedErrors[field];
-               setLiveErrors(updatedErrors);
-          }
-     };
-
-     /**
       * Effect to reset the file name display when switching modes
       */
      // Reset state when switching to create mode
@@ -658,7 +536,7 @@ const AddUserFormModal = ({
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Role <span className="text-red-600">*</span>
                                    </label>
-                                   <CustomSelect
+                                   <SearchableSelect
                                         value={String(newUser.role ?? "")}
                                         onChange={(val) => handleFieldChange("role", val, (v) => validateDropdown(v, "Role"))}
                                         options={[
@@ -668,11 +546,9 @@ const AddUserFormModal = ({
                                         icon={User}
                                         placeholder="Select Role"
                                         disabled={isDropdownLoading}
-                                        className={hasError("role") ? 'border-red-500' : ''}
+                                        error={hasError("role")}
+                                        errorMessage={getErrorMessage("role")}
                                    />
-                                   {getErrorMessage("role") && (
-                                        <p className="mt-1 text-xs text-red-600">{getErrorMessage("role")}</p>
-                                   )}
                               </div>
 
                               {/* Phone Number Input - Numeric only validation */}
@@ -706,7 +582,7 @@ const AddUserFormModal = ({
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Designation <span className="text-red-600">*</span>
                                    </label>
-                                   <CustomSelect
+                                   <SearchableSelect
                                         value={newUser.designation ?? ""}
                                         onChange={(val) => handleFieldChange("designation", val, (v) => validateDropdown(v, "Designation"))}
                                         options={[
@@ -716,274 +592,76 @@ const AddUserFormModal = ({
                                         icon={User}
                                         placeholder="Select Designation"
                                         disabled={isDropdownLoading}
-                                        className={hasError("designation") ? 'border-red-500' : ''}
+                                        error={hasError("designation")}
+                                        errorMessage={getErrorMessage("designation")}
                                    />
-                                   {getErrorMessage("designation") && (
-                                        <p className="mt-1 text-xs text-red-600">{getErrorMessage("designation")}</p>
-                                   )}
                               </div>
-
                               {/* Project Manager Selection - Conditionally visible - MULTI SELECT */}
                               {fieldVisibility.projectManager.visible && (
-                                   <div className="relative" ref={pmDropdownRef}>
+                                   <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                                              Project Manager {fieldVisibility.projectManager.required && <span className="text-red-600">*</span>}
                                         </label>
-                                        
-                                        {/* Dropdown Button */}
-                                        <button
-                                             type="button"
-                                             onClick={() => toggleDropdown('projectManagers')}
-                                             className={`w-full px-3 py-3 text-sm bg-gray-50 border ${hasError("projectManagers") ? 'border-red-500' : 'border-gray-200'} rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                        <MultiSelectWithCheckbox
+                                             value={newUser.projectManagers || []}
+                                             onChange={(val) => {
+                                                  setNewUser({ ...newUser, projectManagers: val });
+                                                  clearFieldError && clearFieldError("projectManagers");
+                                             }}
+                                             options={projectManagers.map(pm => ({ value: String(pm.user_id), label: pm.label }))}
+                                             icon={Users}
+                                             placeholder="Select Project Managers"
                                              disabled={isDropdownLoading}
-                                        >
-                                             <span className="text-gray-600">
-                                                  {newUser.projectManagers && newUser.projectManagers.length > 0
-                                                       ? `${newUser.projectManagers.length} selected`
-                                                       : "Select Project Managers"}
-                                             </span>
-                                             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.projectManagers ? 'rotate-180' : ''}`} />
-                                        </button>
-
-                                        {/* Selected Pills */}
-                                        {newUser.projectManagers && newUser.projectManagers.length > 0 && (
-                                             <div className="flex flex-wrap gap-2 mt-2">
-                                                  {newUser.projectManagers.map(pmId => {
-                                                       const pm = projectManagers.find(m => String(m.user_id) === String(pmId));
-                                                       return pm ? (
-                                                            <span key={pmId} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs">
-                                                                 {pm.label}
-                                                                 <button
-                                                                      type="button"
-                                                                      onClick={() => handleRemoveSelection('projectManagers', pmId)}
-                                                                      className="hover:bg-blue-200 rounded-full p-0.5"
-                                                                 >
-                                                                      <X className="w-3 h-3" />
-                                                                 </button>
-                                                            </span>
-                                                       ) : null;
-                                                  })}
-                                             </div>
-                                        )}
-
-                                        {/* Dropdown Menu */}
-                                        {dropdownOpen.projectManagers && (
-                                             <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                                  {projectManagers.length === 0 ? (
-                                                       <div className="px-3 py-2 text-sm text-gray-500">No options available</div>
-                                                  ) : (
-                                                       <>
-                                                            {/* Select All Option */}
-                                                            <label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-200 bg-gray-50">
-                                                                 <input
-                                                                      type="checkbox"
-                                                                      checked={projectManagers.length > 0 && (newUser.projectManagers || []).length === projectManagers.length}
-                                                                      onChange={(e) => handleSelectAll('projectManagers', projectManagers, e.target.checked)}
-                                                                      className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                                 />
-                                                                 <span className="text-sm font-semibold text-gray-900">Select All</span>
-                                                            </label>
-                                                            {projectManagers.map((pm) => {
-                                                                 const isChecked = (newUser.projectManagers || []).some(id => String(id) === String(pm.user_id));
-                                                                 return (
-                                                                      <label
-                                                                           key={pm.user_id}
-                                                                           className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                      >
-                                                                           <input
-                                                                                type="checkbox"
-                                                                                checked={isChecked}
-                                                                                onChange={(e) => handleMultipleSelect('projectManagers', pm.user_id, e.target.checked)}
-                                                                                className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                                           />
-                                                                           <span className="text-sm text-gray-700">{pm.label}</span>
-                                                                      </label>
-                                                                 );
-                                                            })}
-                                                       </>
-                                                  )}
-                                             </div>
-                                        )}
-                                        
-                                        {getErrorMessage("projectManagers") && (
-                                             <p className="mt-1 text-xs text-red-600">{getErrorMessage("projectManagers")}</p>
-                                        )}
+                                             error={hasError("projectManagers")}
+                                             errorMessage={getErrorMessage("projectManagers")}
+                                             maxDisplayCount={2}
+                                        />
                                    </div>
                               )}
 
                               {/* Assistant Manager Selection - Conditionally visible - MULTI SELECT */}
                               {fieldVisibility.assistantManager.visible && (
-                                   <div className="relative" ref={amDropdownRef}>
+                                   <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                                              Assistant Manager {fieldVisibility.assistantManager.required && <span className="text-red-600">*</span>}
                                         </label>
-                                        
-                                        {/* Dropdown Button */}
-                                        <button
-                                             type="button"
-                                             onClick={() => toggleDropdown('assistantManagers')}
-                                             className={`w-full px-3 py-3 text-sm bg-gray-50 border ${hasError("assistantManagers") ? 'border-red-500' : 'border-gray-200'} rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                        <MultiSelectWithCheckbox
+                                             value={newUser.assistantManagers || []}
+                                             onChange={(val) => {
+                                                  setNewUser({ ...newUser, assistantManagers: val });
+                                                  clearFieldError && clearFieldError("assistantManagers");
+                                             }}
+                                             options={assistantManagers.map(am => ({ value: String(am.user_id), label: am.label }))}
+                                             icon={Users}
+                                             placeholder="Select Assistant Managers"
                                              disabled={isDropdownLoading}
-                                        >
-                                             <span className="text-gray-600">
-                                                  {newUser.assistantManagers && newUser.assistantManagers.length > 0
-                                                       ? `${newUser.assistantManagers.length} selected`
-                                                       : "Select Assistant Managers"}
-                                             </span>
-                                             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.assistantManagers ? 'rotate-180' : ''}`} />
-                                        </button>
-
-                                        {/* Selected Pills */}
-                                        {newUser.assistantManagers && newUser.assistantManagers.length > 0 && (
-                                             <div className="flex flex-wrap gap-2 mt-2">
-                                                  {newUser.assistantManagers.map(amId => {
-                                                       const am = assistantManagers.find(m => String(m.user_id) === String(amId));
-                                                       return am ? (
-                                                            <span key={amId} className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">
-                                                                 {am.label}
-                                                                 <button
-                                                                      type="button"
-                                                                      onClick={() => handleRemoveSelection('assistantManagers', amId)}
-                                                                      className="hover:bg-green-200 rounded-full p-0.5"
-                                                                 >
-                                                                      <X className="w-3 h-3" />
-                                                                 </button>
-                                                            </span>
-                                                       ) : null;
-                                                  })}
-                                             </div>
-                                        )}
-
-                                        {/* Dropdown Menu */}
-                                        {dropdownOpen.assistantManagers && (
-                                             <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                                  {assistantManagers.length === 0 ? (
-                                                       <div className="px-3 py-2 text-sm text-gray-500">No options available</div>
-                                                  ) : (
-                                                       <>
-                                                            {/* Select All Option */}
-                                                            <label className="flex items-center px-3 py-2 hover:bg-green-50 cursor-pointer border-b border-gray-200 bg-gray-50">
-                                                                 <input
-                                                                      type="checkbox"
-                                                                      checked={assistantManagers.length > 0 && (newUser.assistantManagers || []).length === assistantManagers.length}
-                                                                      onChange={(e) => handleSelectAll('assistantManagers', assistantManagers, e.target.checked)}
-                                                                      className="mr-2 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                                                 />
-                                                                 <span className="text-sm font-semibold text-gray-900">Select All</span>
-                                                            </label>
-                                                            {assistantManagers.map((am) => {
-                                                                 const isChecked = (newUser.assistantManagers || []).some(id => String(id) === String(am.user_id));
-                                                                 return (
-                                                                      <label
-                                                                           key={am.user_id}
-                                                                           className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                      >
-                                                                           <input
-                                                                                type="checkbox"
-                                                                                checked={isChecked}
-                                                                                onChange={(e) => handleMultipleSelect('assistantManagers', am.user_id, e.target.checked)}
-                                                                                className="mr-2 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                                                                           />
-                                                                           <span className="text-sm text-gray-700">{am.label}</span>
-                                                                      </label>
-                                                                 );
-                                                            })}
-                                                       </>
-                                                  )}
-                                             </div>
-                                        )}
-                                        
-                                        {getErrorMessage("assistantManagers") && (
-                                             <p className="mt-1 text-xs text-red-600">{getErrorMessage("assistantManagers")}</p>
-                                        )}
+                                             error={hasError("assistantManagers")}
+                                             errorMessage={getErrorMessage("assistantManagers")}
+                                             maxDisplayCount={2}
+                                        />
                                    </div>
                               )}
 
                               {/* Quality Analyst Selection - Conditionally visible - MULTI SELECT */}
                               {fieldVisibility.qualityAnalyst.visible && (
-                                   <div className="relative" ref={qaDropdownRef}>
+                                   <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                                              Quality Analyst {fieldVisibility.qualityAnalyst.required && <span className="text-red-600">*</span>}
                                         </label>
-                                        
-                                        {/* Dropdown Button */}
-                                        <button
-                                             type="button"
-                                             onClick={() => toggleDropdown('qualityAnalysts')}
-                                             className={`w-full px-3 py-3 text-sm bg-gray-50 border ${hasError("qualityAnalysts") ? 'border-red-500' : 'border-gray-200'} rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                        <MultiSelectWithCheckbox
+                                             value={newUser.qualityAnalysts || []}
+                                             onChange={(val) => {
+                                                  setNewUser({ ...newUser, qualityAnalysts: val });
+                                                  clearFieldError && clearFieldError("qualityAnalysts");
+                                             }}
+                                             options={qas.map(qa => ({ value: String(qa.user_id), label: qa.label }))}
+                                             icon={Users}
+                                             placeholder="Select Quality Analysts"
                                              disabled={isDropdownLoading}
-                                        >
-                                             <span className="text-gray-600">
-                                                  {newUser.qualityAnalysts && newUser.qualityAnalysts.length > 0
-                                                       ? `${newUser.qualityAnalysts.length} selected`
-                                                       : "Select Quality Analysts"}
-                                             </span>
-                                             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen.qualityAnalysts ? 'rotate-180' : ''}`} />
-                                        </button>
-
-                                        {/* Selected Pills */}
-                                        {newUser.qualityAnalysts && newUser.qualityAnalysts.length > 0 && (
-                                             <div className="flex flex-wrap gap-2 mt-2">
-                                                  {newUser.qualityAnalysts.map(qaId => {
-                                                       const qa = qas.find(m => String(m.user_id) === String(qaId));
-                                                       return qa ? (
-                                                            <span key={qaId} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-md text-xs">
-                                                                 {qa.label}
-                                                                 <button
-                                                                      type="button"
-                                                                      onClick={() => handleRemoveSelection('qualityAnalysts', qaId)}
-                                                                      className="hover:bg-purple-200 rounded-full p-0.5"
-                                                                 >
-                                                                      <X className="w-3 h-3" />
-                                                                 </button>
-                                                            </span>
-                                                       ) : null;
-                                                  })}
-                                             </div>
-                                        )}
-
-                                        {/* Dropdown Menu */}
-                                        {dropdownOpen.qualityAnalysts && (
-                                             <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                                  {qas.length === 0 ? (
-                                                       <div className="px-3 py-2 text-sm text-gray-500">No options available</div>
-                                                  ) : (
-                                                       <>
-                                                            {/* Select All Option */}
-                                                            <label className="flex items-center px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-gray-200 bg-gray-50">
-                                                                 <input
-                                                                      type="checkbox"
-                                                                      checked={qas.length > 0 && (newUser.qualityAnalysts || []).length === qas.length}
-                                                                      onChange={(e) => handleSelectAll('qualityAnalysts', qas, e.target.checked)}
-                                                                      className="mr-2 w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                                                                 />
-                                                                 <span className="text-sm font-semibold text-gray-900">Select All</span>
-                                                            </label>
-                                                            {qas.map((qa) => {
-                                                                 const isChecked = (newUser.qualityAnalysts || []).some(id => String(id) === String(qa.user_id));
-                                                                 return (
-                                                                      <label
-                                                                           key={qa.user_id}
-                                                                           className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                                                      >
-                                                                           <input
-                                                                                type="checkbox"
-                                                                                checked={isChecked}
-                                                                                onChange={(e) => handleMultipleSelect('qualityAnalysts', qa.user_id, e.target.checked)}
-                                                                                className="mr-2 w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                                                                           />
-                                                                           <span className="text-sm text-gray-700">{qa.label}</span>
-                                                                      </label>
-                                                                 );
-                                                            })}
-                                                       </>
-                                                  )}
-                                             </div>
-                                        )}
-                                        
-                                        {getErrorMessage("qualityAnalysts") && (
-                                             <p className="mt-1 text-xs text-red-600">{getErrorMessage("qualityAnalysts")}</p>
-                                        )}
+                                             error={hasError("qualityAnalysts")}
+                                             errorMessage={getErrorMessage("qualityAnalysts")}
+                                             maxDisplayCount={2}
+                                        />
                                    </div>
                               )}
 
@@ -992,7 +670,7 @@ const AddUserFormModal = ({
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Team <span className="text-red-600">*</span>
                                    </label>
-                                   <CustomSelect
+                                   <SearchableSelect
                                         value={newUser.team ?? ""}
                                         onChange={(val) => handleFieldChange("team", val, (v) => validateDropdown(v, "Team"))}
                                         options={[
@@ -1002,13 +680,10 @@ const AddUserFormModal = ({
                                         icon={User}
                                         placeholder="Select Team"
                                         disabled={isDropdownLoading}
-                                        className={hasError("team") ? 'border-red-500' : ''}
+                                        error={hasError("team")}
+                                        errorMessage={getErrorMessage("team")}
                                    />
-                                   {getErrorMessage("team") && (
-                                        <p className="mt-1 text-xs text-red-600">{getErrorMessage("team")}</p>
-                                   )}
                               </div>
-
                               {/* Password Input - Shown in both create and edit mode */}
                               <div>
                                    <label className="block text-sm font-semibold text-gray-700 mb-2">

@@ -97,19 +97,9 @@
 // };
 
 // export default FilterBar;
-
-
-
-
-
-
-
-
-
-
 import React from 'react';
 import { Filter, Clock, Activity } from 'lucide-react';
-import CustomSelect from '../common/CustomSelect';
+import SearchableSelect from '../common/SearchableSelect';
 
 const FilterBar = ({
   isAgent,
@@ -151,7 +141,7 @@ const FilterBar = ({
 
         {/* TASK - Hidden for agents and QA */}
         {!isAgent && !isQA && (
-          <CustomSelect
+          <SearchableSelect
             value={selectedTask}
             onChange={setSelectedTask}
             options={[
@@ -165,7 +155,7 @@ const FilterBar = ({
 
         {/* PREV PERIOD - Hidden for agents and QA */}
         {!isAgent && !isQA && (
-          <CustomSelect
+          <SearchableSelect
             value={comparisonMode}
             onChange={setComparisonMode}
             options={[

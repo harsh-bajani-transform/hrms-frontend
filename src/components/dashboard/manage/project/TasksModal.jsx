@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Plus, Loader2, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { X, Plus, Loader2, ChevronDown, Pencil, Trash2, Upload, Users, Table } from 'lucide-react';
 import { fetchDropdown } from '../../../../services/dropdownService';
 import { fetchProjectTasks } from '../../../../services/projectService';
+import { useAuth } from '../../../../context/AuthContext';
+import MultiSelectWithCheckbox from '../../../common/MultiSelectWithCheckbox';
+import * as XLSX from 'xlsx';
 
 const TasksModal = ({
   project,
@@ -11,6 +14,7 @@ const TasksModal = ({
   onDeleteTask,
   readOnly = false
 }) => {
+    const { user } = useAuth();
     const [tasks, setTasks] = useState([]);
     const [tasksLoading, setTasksLoading] = useState(false);
     const [editTaskId, setEditTaskId] = useState(null);
@@ -21,26 +25,35 @@ const TasksModal = ({
     useEffect(() => {
       if (!project?.id) return;
       setTasksLoading(true);
-      fetchProjectTasks(project.id)
+      fetchProjectTasks(
+        project.id,
+        user?.user_id,
+        user?.device_id || 'web',
+        user?.device_type || 'Laptop'
+      )
         .then(res => {
           setTasks(Array.isArray(res.data) ? res.data : []);
         })
         .catch(() => setTasks([]))
         .finally(() => setTasksLoading(false));
-    }, [project?.id]);
+    }, [project?.id, user?.user_id, user?.device_id, user?.device_type]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     target: '',
     teamIds: [],
+    file: null,
+    importantColumns: [],
   });
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agents, setAgents] = useState([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [agentsError, setAgentsError] = useState('');
-  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
-  const dropdownRef = useRef(null);
+  const fileInputRef = useRef(null);
+  
+  // Dynamic important columns options from Excel file
+  const [excelColumnHeaders, setExcelColumnHeaders] = useState([]);
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -65,49 +78,65 @@ const TasksModal = ({
     loadAgents();
   }, [project?.id]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showTeamDropdown && dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowTeamDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showTeamDropdown]);
-
-  const toggleTeamSelection = (id) => {
-    setFormData((prev) => {
-      const exists = prev.teamIds.includes(id);
-      const updated = exists ? prev.teamIds.filter((t) => t !== id) : [...prev.teamIds, id];
-      return { ...prev, teamIds: updated };
-    });
-
+  const handleTeamChange = (newTeamIds) => {
+    setFormData((prev) => ({ ...prev, teamIds: newTeamIds }));
     if (formErrors.teamIds) {
       setFormErrors((prev) => ({ ...prev, teamIds: '' }));
     }
   };
 
-  const handleSelectAllTeams = (isChecked) => {
-    if (isChecked) {
-      // Select all agents
-      const allAgentIds = agents.map(agent => agent.id);
-      setFormData((prev) => ({ ...prev, teamIds: allAgentIds }));
-    } else {
-      // Deselect all agents
-      setFormData((prev) => ({ ...prev, teamIds: [] }));
-    }
-    
-    // Clear error when user makes a selection
-    if (isChecked && formErrors.teamIds) {
-      setFormErrors((prev) => ({ ...prev, teamIds: '' }));
-    }
+  const handleImportantColumnsChange = (newColumns) => {
+    setFormData((prev) => ({ ...prev, importantColumns: newColumns }));
   };
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
       setFormErrors((prev) => ({ ...prev, [field]: '' }));
+    }
+  };
+  
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData((prev) => ({ ...prev, file }));
+      
+      // Read Excel file and extract column headers
+      try {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            // Get first row (column headers)
+            if (jsonData && jsonData.length > 0 && jsonData[0]) {
+              const headers = jsonData[0].filter(header => header && String(header).trim());
+              setExcelColumnHeaders(headers.map(h => String(h)));
+              // Clear previously selected important columns when new file is uploaded
+              setFormData((prev) => ({ ...prev, importantColumns: [] }));
+            }
+          } catch (error) {
+            console.error('Error reading Excel file:', error);
+            toast.error('Failed to read Excel file');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (error) {
+        console.error('Error processing file:', error);
+        toast.error('Failed to process Excel file');
+      }
+    }
+  };
+  
+  const handleRemoveFile = () => {
+    setFormData((prev) => ({ ...prev, file: null, importantColumns: [] }));
+    setExcelColumnHeaders([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -138,11 +167,19 @@ const TasksModal = ({
     const success = await onAddTask(formData);
     setIsSubmitting(false);
     if (success) {
-      setFormData({ name: '', description: '', target: '', teamIds: [] });
-      setShowTeamDropdown(false);
+      setFormData({ name: '', description: '', target: '', teamIds: [], file: null, importantColumns: [] });
+      setExcelColumnHeaders([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       // Refetch tasks
       setTasksLoading(true);
-      fetchProjectTasks(project.id)
+      fetchProjectTasks(
+        project.id,
+        user?.user_id,
+        user?.device_id || 'web',
+        user?.device_type || 'Laptop'
+      )
         .then(res => setTasks(Array.isArray(res.data) ? res.data : []))
         .finally(() => setTasksLoading(false));
     }
@@ -194,7 +231,12 @@ const TasksModal = ({
       setEditFormData(null);
       // Refetch tasks
       setTasksLoading(true);
-      fetchProjectTasks(project.id)
+      fetchProjectTasks(
+        project.id,
+        user?.user_id,
+        user?.device_id || 'web',
+        user?.device_type || 'Laptop'
+      )
         .then(res => setTasks(Array.isArray(res.data) ? res.data : []))
         .finally(() => setTasksLoading(false));
     }
@@ -204,23 +246,14 @@ const TasksModal = ({
     if (!window.confirm('Delete this task?')) return;
     setTasksLoading(true);
     await onDeleteTask(project.id, taskId);
-    fetchProjectTasks(project.id)
+    fetchProjectTasks(
+      project.id,
+      user?.user_id,
+      user?.device_id || 'web',
+      user?.device_type || 'Laptop'
+    )
       .then(res => setTasks(Array.isArray(res.data) ? res.data : []))
       .finally(() => setTasksLoading(false));
-  };
-
-  const renderTeamLabel = () => {
-    if (agentsLoading) return 'Loading agents...';
-    if (formData.teamIds.length === 0) return 'Select agents';
-
-    const names = agents
-      .filter((a) => formData.teamIds.includes(a.id))
-      .map((a) => a.label)
-      .filter(Boolean);
-
-    if (names.length === 0) return `${formData.teamIds.length} selected`;
-    if (names.length > 2) return `${names.length} selected`;
-    return names.join(', ');
   };
 
   return (
@@ -275,74 +308,73 @@ const TasksModal = ({
                     onChange={(e) => handleChange('description', e.target.value)}
                   />
                 </div>
-                <div className="md:col-span-2" ref={dropdownRef}>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Team (Agents) <span className="text-red-600">*</span></label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowTeamDropdown((prev) => !prev)}
-                      className="flex items-center justify-between w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
+                
+                {/* Task File Upload - Excel Only */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Task File (Excel Only)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="task-file-upload"
+                      accept=".xlsx,.xls"
+                    />
+                    <label
+                      htmlFor="task-file-upload"
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 text-sm"
                     >
-                      <span className="truncate text-left">{renderTeamLabel()}</span>
-                      <ChevronDown className={`w-4 h-4 transition-transform ${showTeamDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-                    {showTeamDropdown && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                        {agentsLoading && (
-                          <div className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Loading agents...
-                          </div>
-                        )}
-                        {!agentsLoading && agents.length === 0 && (
-                          <div className="px-3 py-2 text-sm text-slate-500">
-                            {agentsError || 'No agents available'}
-                          </div>
-                        )}
-                        {!agentsLoading && agents.length > 0 && (
-                          <>
-                            {/* Select All Option */}
-                            <label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-                                checked={agents.length > 0 && formData.teamIds.length === agents.length}
-                                onChange={(e) => handleSelectAllTeams(e.target.checked)}
-                              />
-                              <span className="font-semibold text-slate-900">Select All</span>
-                            </label>
-                            {agents.map((agent) => (
-                              <label key={agent.id} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-                                  checked={formData.teamIds.includes(agent.id)}
-                                  onChange={() => toggleTeamSelection(agent.id)}
-                                />
-                                <span className="text-slate-700">{agent.label || 'Unnamed agent'}</span>
-                              </label>
-                            ))}
-                          </>
-                        )}
+                      <Upload className="w-4 h-4" />
+                      Choose Excel File
+                    </label>
+                    {formData.file && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                        <span className="text-blue-800 truncate max-w-xs">{formData.file.name}</span>
+                        <button
+                          onClick={handleRemoveFile}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Remove file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     )}
                   </div>
-                  {formErrors.teamIds && <p className="text-xs text-red-600 mt-1">{formErrors.teamIds}</p>}
-                  {formData.teamIds.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {formData.teamIds.map((id) => {
-                        const agent = agents.find((a) => a.id === id);
-                        return (
-                          <span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                            {agent?.label || id}
-                            <button onClick={() => toggleTeamSelection(id)} className="text-blue-600 hover:text-blue-800">
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
+                  {excelColumnHeaders.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1">✓ Found {excelColumnHeaders.length} columns in Excel file</p>
                   )}
+                </div>
+                
+                {/* Important Columns Dropdown - Populated from Excel */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Important Columns</label>
+                  <MultiSelectWithCheckbox
+                    value={formData.importantColumns}
+                    onChange={handleImportantColumnsChange}
+                    options={excelColumnHeaders.map(col => ({ value: col, label: col }))}
+                    icon={Table}
+                    placeholder={excelColumnHeaders.length === 0 ? "Upload Excel file first" : "Select important columns"}
+                    disabled={excelColumnHeaders.length === 0}
+                    showSelectAll={true}
+                    maxDisplayCount={2}
+                  />
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Team (Agents) <span className="text-red-600">*</span></label>
+                  <MultiSelectWithCheckbox
+                    value={formData.teamIds}
+                    onChange={handleTeamChange}
+                    options={agents.map(agent => ({ value: agent.id, label: agent.label }))}
+                    icon={Users}
+                    placeholder={agentsLoading ? "Loading agents..." : agents.length === 0 ? (agentsError || "No agents available") : "Select agents"}
+                    disabled={agentsLoading || agents.length === 0}
+                    showSelectAll={true}
+                    error={!!formErrors.teamIds}
+                    errorMessage={formErrors.teamIds}
+                    maxDisplayCount={2}
+                  />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
@@ -352,7 +384,7 @@ const TasksModal = ({
                   className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  {isSubmitting ? 'Adding...' : 'Add Task'}
+                  {isSubmitting ? 'Submitting...' : 'Submit'}
                 </button>
               </div>
             </div>
