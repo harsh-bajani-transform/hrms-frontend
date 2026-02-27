@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Briefcase, X, Upload, XCircle, User } from "lucide-react";
+import { Briefcase, X, Upload, XCircle, User, Users } from "lucide-react";
 import { log, logError } from "../../../../config/environment";
-import CustomSelect from "../../../common/CustomSelect";
+import SearchableSelect from "../../../common/SearchableSelect";
+import MultiSelectWithCheckbox from "../../../common/MultiSelectWithCheckbox";
 
 const EditProjectModal = ({
 	project,
@@ -11,6 +12,7 @@ const EditProjectModal = ({
 	assistantManagers = [],
 	qaManagers = [],
 	teams = [],
+	projectCategories = [],
 	formErrors = {},
 	isSubmitting = false,
 	handleProjectFilesChange,
@@ -20,11 +22,6 @@ const EditProjectModal = ({
 	clearFieldError,
 }) => {
 	const fileInputRef = useRef(null);
-	const [dropdownOpen, setDropdownOpen] = useState({
-		assistantManagers: false,
-		qaManagers: false,
-		teams: false,
-	});
 	const [editProject, setEditProject] = useState(null);
 
 	// Initialize editProject from project prop
@@ -146,6 +143,7 @@ const EditProjectModal = ({
 				qaManagerIds,
 				teamIds,
 				projectManagerId: String(project.projectManagerId || project.project_manager_id || ""),
+				// projectCategoryId: String(project.projectCategoryId || project.project_category_id || ""),
 				name: project.name || project.project_name || "",
 				code: project.code || project.project_code || "",
 				description: project.description || project.project_description || "",
@@ -159,72 +157,38 @@ const EditProjectModal = ({
 		}
 	}, [project, assistantManagers, qaManagers, teams]);
 
-	const handleMultipleSelect = (field, userId, isChecked) => {
-		if (!editProject) return;
-		
-		const currentValues = (editProject[field] || []).map(id => String(id));
-		const normalizedUserId = String(userId);
-		let updatedValues;
-		
-		if (isChecked) {
-			if (!currentValues.includes(normalizedUserId)) {
-				updatedValues = [...currentValues, normalizedUserId];
-			} else {
-				updatedValues = currentValues;
-			}
-		} else {
-			updatedValues = currentValues.filter(id => id !== normalizedUserId);
-		}
-		
-		setEditProject(prev => ({ ...prev, [field]: updatedValues }));
-		// Sync with parent
-		if (onFieldChange) {
-			onFieldChange(field, updatedValues);
-		}
-	};
-
-	const handleSelectAll = (field, allItems, isChecked) => {
-		if (!editProject) return;
-		
-		if (isChecked) {
-			// Select all items
-			const allIds = allItems.map(item => String(item.id));
-			setEditProject(prev => ({ ...prev, [field]: allIds }));
-			if (onFieldChange) {
-				onFieldChange(field, allIds);
-			}
-		} else {
-			// Deselect all items
-			setEditProject(prev => ({ ...prev, [field]: [] }));
-			if (onFieldChange) {
-				onFieldChange(field, []);
-			}
-		}
-	};
-
 	// Helper to normalize dropdown data for lookup by id
 	const normalizeList = (items, idKey = 'user_id', labelKey = 'user_name') => {
 		if (!Array.isArray(items)) return [];
-		return items.map(item => {
-			const id = String(item[idKey] ?? item.team_id ?? item.id);
-			const label = item[labelKey] || item.label || item.user_name || item.team_name || item.name || id;
-			return { id, label };
-		});
+		return items
+			.map(item => {
+				const id = String(item.project_category_id ?? item[idKey] ?? item.team_id ?? item.id ?? '');
+				const label = item[labelKey] || item.label || item.user_name || item.team_name || item.name || id;
+				return { id, label };
+			})
+			.filter(item => item.id !== null && item.id !== undefined && String(item.id) !== 'undefined');
 	};
 
 	const processedAssistantManagers = normalizeList(assistantManagers, 'user_id', 'user_name');
 	const processedQaManagers = normalizeList(qaManagers, 'user_id', 'user_name');
 	const processedTeams = normalizeList(teams, 'user_id', 'user_name');
 	const processedProjectManagers = normalizeList(projectManagers, 'user_id', 'user_name');
-
-	const toggleDropdown = (dropdown) => {
-		setDropdownOpen(prev => ({
-			assistantManagers: false,
-			qaManagers: false,
-			teams: false,
-			[dropdown]: !prev[dropdown]
-		}));
-	};
+	const processedProjectCategories = normalizeList(projectCategories, 'project_category_id', 'label');
+	
+	// console.log('[EditProjectModal] Project Categories:', {
+	// 	raw: projectCategories,
+	// 	processed: processedProjectCategories
+	// });
+	
+	// Build options for project category
+	// const projectCategoryOptions = [
+	// 	{ value: "", label: "Select Category" },
+	// 	...processedProjectCategories
+	// 		.filter((cat) => cat.id !== null && cat.id !== undefined && String(cat.id) !== 'undefined')
+	// 		.map((cat) => ({ value: cat.id, label: cat.label }))
+	// ];
+	
+	// console.log('[EditProjectModal] Final category options:', projectCategoryOptions);
 
 	const handleFileChange = (e) => {
 		const files = e.target.files;
@@ -254,40 +218,40 @@ const EditProjectModal = ({
 
 	return (
 		<div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-			<div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
-				<div className="p-4 bg-blue-800 text-white flex justify-between items-center shrink-0">
-					<div>
-						<h2 className="text-lg font-bold flex items-center gap-2">
-							<Briefcase className="w-5 h-5 text-blue-300" />
-							Edit Project
-						</h2>
-						<p className="text-blue-200 text-xs">Update project details as needed</p>
-					</div>
-					<button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
-						<X className="w-5 h-5 text-white" />
-					</button>
+			<div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[98vh] flex flex-col overflow-hidden animate-fade-in-up">
+			<div className="p-3 bg-blue-800 text-white flex justify-between items-center shrink-0">
+				<div>
+					<h2 className="text-lg font-bold flex items-center gap-2">
+						<Briefcase className="w-5 h-5 text-blue-300" />
+						Edit Project
+					</h2>
+					<p className="text-blue-200 text-xs">Update project details as needed</p>
 				</div>
-				<div className="flex-1 overflow-y-auto p-4 md:p-6 bg-white">
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+				<button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
+					<X className="w-5 h-5 text-white" />
+				</button>
+			</div>
+			<div className="flex-1 overflow-y-auto p-3 md:p-4 bg-white">
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 						{/* Project Name */}
 						<div>
 							<label className="block text-sm font-semibold text-gray-700 mb-2">Project Name <span className="text-red-600">*</span></label>
 							<input
 								type="text"
-								className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-								placeholder="e.g. MoveEasy Platform"
-								value={editProject.name}
-								onChange={e => setEditProject(prev => ({ ...prev, name: e.target.value }))}
-								required
-							/>
-							{formErrors.name && <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>}
-						</div>
-						{/* Project Code */}
-						<div>
-							<label className="block text-sm font-semibold text-gray-700 mb-2">Project Code <span className="text-red-600">*</span></label>
-							<input
-								type="text"
-								className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+							className="block w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+							placeholder="e.g. MoveEasy Platform"
+							value={editProject.name}
+							onChange={e => setEditProject(prev => ({ ...prev, name: e.target.value }))}
+							required
+						/>
+						{formErrors.name && <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>}
+					</div>
+					{/* Project Code */}
+					<div>
+						<label className="block text-sm font-semibold text-gray-700 mb-2">Project Code <span className="text-red-600">*</span></label>
+						<input
+							type="text"
+							className="block w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 								placeholder="e.g. MOVE"
 								value={editProject.code || ''}
 								onChange={e => {
@@ -308,18 +272,39 @@ const EditProjectModal = ({
 						<div>
 							<label className="block text-sm font-semibold text-gray-700 mb-2">Project Description</label>
 							<textarea
-								className="block w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-12 resize-none"
+							className="block w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-10 resize-none"
 								placeholder="Describe the project scope and features..."
 								value={editProject.description}
 								onChange={e => setEditProject(prev => ({ ...prev, description: e.target.value }))}
 							/>
-						</div>
-						{/* Project Manager */}
+						</div>					{/* Project Category */}
+					{/* <div>
+						<label className="block text-sm font-semibold text-gray-700 mb-2">
+							Project Category
+						</label>
+						<SearchableSelect
+							value={editProject.projectCategoryId || ""}
+							onChange={(val) => {
+								setEditProject(prev => ({ ...prev, projectCategoryId: val }));
+								if (clearFieldError) {
+									clearFieldError('projectCategoryId');
+								}
+								if (onFieldChange) {
+									onFieldChange('projectCategoryId', val);
+								}
+							}}
+						options={projectCategoryOptions}
+							icon={Briefcase}
+							placeholder="Select Category"
+							error={!!formErrors.projectCategoryId}
+							errorMessage={formErrors.projectCategoryId}
+						/>
+					</div> */}						{/* Project Manager */}
 						<div>
 							<label className="block text-sm font-semibold text-gray-700 mb-2">
 								Project Manager <span className="text-red-600">*</span>
 							</label>
-							<CustomSelect
+							<SearchableSelect
 								value={editProject.projectManagerId}
 								onChange={(val) => setEditProject(prev => ({ ...prev, projectManagerId: val }))}
 								options={[
@@ -328,240 +313,76 @@ const EditProjectModal = ({
 								]}
 								icon={User}
 								placeholder="Select Project Manager"
+								error={!!formErrors.projectManagerId}
+								errorMessage={formErrors.projectManagerId}
 							/>
-							{formErrors.projectManagerId && (
-								<p className="mt-1 text-xs text-red-600">{formErrors.projectManagerId}</p>
-							)}
 						</div>
 						{/* Assistant Project Manager - Multi Select */}
-						<div className="md:col-span-1">
-							<label className="block text-xs font-semibold text-slate-500 mb-1 text-left">
+						<div>
+							<label className="block text-sm font-semibold text-gray-700 mb-2">
 								Assistant Project Manager(s) <span className="text-red-600">*</span>
 							</label>
-							<div className="relative">
-								<button
-									type="button"
-									onClick={() => toggleDropdown('assistantManagers')}
-									className="flex items-center justify-between w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
-								>
-									<span className="truncate text-left">
-										{editProject.assistantManagerIds?.length === 0
-											? 'Select Assistant Project Managers'
-											: processedAssistantManagers
-												.filter((a) => editProject.assistantManagerIds.includes(a.id))
-												.map((a) => a.label)
-												.filter(Boolean)
-												.join(', ') || `${editProject.assistantManagerIds.length} selected`}
-									</span>
-								</button>
-								{dropdownOpen.assistantManagers && (
-									<div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-										{processedAssistantManagers.length === 0 && (
-											<div className="px-3 py-2 text-sm text-slate-500">No assistant managers available</div>
-										)}									{processedAssistantManagers.length > 0 && (
-										<label className="flex items-center px-3 py-2 hover:bg-green-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
-											<input
-												type="checkbox"
-												checked={processedAssistantManagers.length > 0 && (editProject.assistantManagerIds || []).length === processedAssistantManagers.length}
-												onChange={(e) => handleSelectAll('assistantManagerIds', processedAssistantManagers, e.target.checked)}
-												className="w-4 h-4 text-green-600 border-slate-300 rounded mr-2"
-											/>
-											<span className="font-semibold text-slate-900">Select All</span>
-										</label>
-									)}										{[
-											// Add selected IDs not in processedAssistantManagers
-											...editProject.assistantManagerIds
-												.filter(id => !processedAssistantManagers.some(am => am.id === id))
-												.map(id => ({ id, label: `Unknown (${id})` })),
-											...processedAssistantManagers
-										].map((am) => (
-											<label 
-												key={am.id} 
-												className={`flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm ${editProject.assistantManagerIds.includes(am.id) ? 'bg-blue-50' : ''}`}
-											>
-												<input
-													type="checkbox"
-													className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-													checked={editProject.assistantManagerIds.includes(am.id)}
-													onChange={() => handleMultipleSelect('assistantManagerIds', am.id, !editProject.assistantManagerIds.includes(am.id))}
-												/>
-												<span className="text-slate-700 font-semibold">{am.label || 'Unnamed'}</span>
-												{editProject.assistantManagerIds.includes(am.id) && (
-													<span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">Selected</span>
-												)}
-											</label>
-										))}
-									</div>
-								)}
-							</div>
-							{formErrors.assistantManagerIds && (
-								<p className="text-xs text-red-600 mt-1">{formErrors.assistantManagerIds}</p>
-							)}
-							{Array.isArray(editProject.assistantManagerIds) && editProject.assistantManagerIds.length > 0 && (
-								<div className="flex flex-wrap gap-2 mt-2">
-									{editProject.assistantManagerIds.map((id) => {
-										const am = processedAssistantManagers.find((a) => a.id === id);
-										return (
-											<span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-												{am?.label || id}
-												<button 
-													onClick={() => handleMultipleSelect('assistantManagerIds', id, false)} 
-													className="text-green-600 hover:text-green-800"
-												>
-													&times;
-												</button>
-											</span>
-										);
-									})}
-								</div>
-							)}
+							<MultiSelectWithCheckbox
+								value={editProject.assistantManagerIds || []}
+								onChange={(val) => {
+									setEditProject(prev => ({ ...prev, assistantManagerIds: val }));
+									if (onFieldChange) onFieldChange('assistantManagerIds', val);
+									if (clearFieldError) clearFieldError('assistantManagerIds');
+								}}
+								options={processedAssistantManagers.map((am) => ({ value: am.id, label: am.label }))}
+								icon={Users}
+								placeholder="Select Assistant Project Managers"
+								error={!!formErrors.assistantManagerIds}
+								errorMessage={formErrors.assistantManagerIds}
+								maxDisplayCount={2}
+							/>
 						</div>
 						{/* QA Manager - Multi Select */}
-						<div className="md:col-span-1">
-							<label className="block text-xs font-semibold text-slate-500 mb-1 text-left">QA Manager(s) <span className="text-red-600">*</span></label>
-							<div className="relative">
-								<button
-									type="button"
-									onClick={() => toggleDropdown('qaManagers')}
-									className="flex items-center justify-between w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
-								>
-									<span className="truncate text-left">
-										{editProject.qaManagerIds?.length === 0
-											? 'Select QA Managers'
-											: processedQaManagers
-												.filter((a) => editProject.qaManagerIds.includes(a.id))
-												.map((a) => a.label)
-												.filter(Boolean)
-												.join(', ') || `${editProject.qaManagerIds.length} selected`}
-									</span>
-								</button>
-								{dropdownOpen.qaManagers && (
-									<div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-										{processedQaManagers.length === 0 && (
-											<div className="px-3 py-2 text-sm text-slate-500">No QA managers available</div>
-										)}									{processedQaManagers.length > 0 && (
-										<label className="flex items-center px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
-											<input
-												type="checkbox"
-												checked={processedQaManagers.length > 0 && (editProject.qaManagerIds || []).length === processedQaManagers.length}
-												onChange={(e) => handleSelectAll('qaManagerIds', processedQaManagers, e.target.checked)}
-												className="w-4 h-4 text-purple-600 border-slate-300 rounded mr-2"
-											/>
-											<span className="font-semibold text-slate-900">Select All</span>
-										</label>
-									)}										{[
-											...editProject.qaManagerIds
-												.filter(id => !processedQaManagers.some(qa => qa.id === id))
-												.map(id => ({ id, label: `Unknown (${id})` })),
-											...processedQaManagers
-										].map((qa) => (
-											<label key={qa.id} className={`flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm ${editProject.qaManagerIds.includes(qa.id) ? 'bg-blue-50' : ''}`}>
-												<input
-													type="checkbox"
-													className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-													checked={editProject.qaManagerIds.includes(qa.id)}
-													onChange={() => handleMultipleSelect('qaManagerIds', qa.id, !editProject.qaManagerIds.includes(qa.id))}
-												/>
-												<span className="text-slate-700 font-semibold">{qa.label || 'Unnamed'}</span>
-												{editProject.qaManagerIds.includes(qa.id) && (
-													<span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">Selected</span>
-												)}
-											</label>
-										))}
-									</div>
-								)}
-							</div>
-							{formErrors.qaManagerIds && <p className="text-xs text-red-600 mt-1">{formErrors.qaManagerIds}</p>}
-							{Array.isArray(editProject.qaManagerIds) && editProject.qaManagerIds.length > 0 && (
-								<div className="flex flex-wrap gap-2 mt-2">
-									{editProject.qaManagerIds.map((id) => {
-										const qa = processedQaManagers.find((a) => a.id === id);
-										return (
-											<span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-												{qa?.label || id}
-												<button onClick={() => handleMultipleSelect('qaManagerIds', id, false)} className="text-blue-600 hover:text-blue-800">&times;</button>
-											</span>
-										);
-									})}
-								</div>
-							)}
+						<div>
+							<label className="block text-sm font-semibold text-gray-700 mb-2">
+								Quality Analyst(s) <span className="text-red-600">*</span>
+							</label>
+							<MultiSelectWithCheckbox
+								value={editProject.qaManagerIds || []}
+								onChange={(val) => {
+									setEditProject(prev => ({ ...prev, qaManagerIds: val }));
+									if (onFieldChange) onFieldChange('qaManagerIds', val);
+									if (clearFieldError) clearFieldError('qaManagerIds');
+								}}
+								options={processedQaManagers.map((qa) => ({ value: qa.id, label: qa.label }))}
+								icon={Users}
+								placeholder="Select Quality Analysts"
+								error={!!formErrors.qaManagerIds}
+								errorMessage={formErrors.qaManagerIds}
+								maxDisplayCount={2}
+							/>
 						</div>
 						{/* Team Assignment - Multi Select */}
-						<div className="md:col-span-1">
-							<label className="block text-xs font-semibold text-slate-500 mb-1 text-left">Agent(s) <span className="text-red-600">*</span></label>
-							<div className="relative">
-								<button
-									type="button"
-									onClick={() => toggleDropdown('teams')}
-									className="flex items-center justify-between w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
-								>
-									<span className="truncate text-left">
-										{editProject.teamIds?.length === 0
-											? 'Select agents'
-											: processedTeams
-												.filter((a) => editProject.teamIds.includes(a.id))
-												.map((a) => a.label)
-												.filter(Boolean)
-												.join(', ') || `${editProject.teamIds.length} selected`}
-									</span>
-								</button>
-								{dropdownOpen.teams && (
-									<div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-										{processedTeams.length === 0 && (
-											<div className="px-3 py-2 text-sm text-slate-500">No agents available</div>
-										)}									{processedTeams.length > 0 && (
-										<label className="flex items-center px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-200 bg-slate-50 text-sm">
-											<input
-												type="checkbox"
-												checked={processedTeams.length > 0 && (editProject.teamIds || []).length === processedTeams.length}
-												onChange={(e) => handleSelectAll('teamIds', processedTeams, e.target.checked)}
-												className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-											/>
-											<span className="font-semibold text-slate-900">Select All</span>
-										</label>
-									)}										{[
-											...editProject.teamIds
-												.filter(id => !processedTeams.some(team => team.id === id))
-												.map(id => ({ id, label: `Unknown (${id})` })),
-											...processedTeams
-										].map((team) => (
-											<label key={team.id} className={`flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm ${editProject.teamIds.includes(team.id) ? 'bg-blue-50' : ''}`}>
-												<input
-													type="checkbox"
-													className="w-4 h-4 text-blue-600 border-slate-300 rounded mr-2"
-													checked={editProject.teamIds.includes(team.id)}
-													onChange={() => handleMultipleSelect('teamIds', team.id, !editProject.teamIds.includes(team.id))}
-												/>
-												<span className="text-slate-700 font-semibold">{team.label || 'Unnamed agent'}</span>
-												{editProject.teamIds.includes(team.id) && (
-													<span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">Selected</span>
-												)}
-											</label>
-										))}
-									</div>
-								)}
-							</div>
-							{formErrors.teamIds && <p className="text-xs text-red-600 mt-1">{formErrors.teamIds}</p>}
-							{Array.isArray(editProject.teamIds) && editProject.teamIds.length > 0 && (
-								<div className="flex flex-wrap gap-2 mt-2">
-									{editProject.teamIds.map((id) => {
-										const team = processedTeams.find((a) => a.id === id);
-										return (
-											<span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
-												{team?.label || id}
-												<button onClick={() => handleMultipleSelect('teamIds', id, false)} className="text-purple-600 hover:text-purple-800">&times;</button>
-											</span>
-										);
-									})}
-								</div>
-							)}
+						<div>
+							<label className="block text-sm font-semibold text-gray-700 mb-2">
+								Agent(s) <span className="text-red-600">*</span>
+							</label>
+							<MultiSelectWithCheckbox
+								value={editProject.teamIds || []}
+								onChange={(val) => {
+									setEditProject(prev => ({ ...prev, teamIds: val }));
+									if (onFieldChange) onFieldChange('teamIds', val);
+									if (clearFieldError) clearFieldError('teamIds');
+								}}
+								options={processedTeams.map((team) => ({ value: team.id, label: team.label }))}
+								icon={Users}
+								placeholder="Select Agents"
+								error={!!formErrors.teamIds}
+								errorMessage={formErrors.teamIds}
+								maxDisplayCount={2}
+							/>
 						</div>
 						{/* Project Files Upload */}
 						<div className="md:col-span-1">
 							<label className="block text-sm font-semibold text-gray-700 mb-2">Project Files</label>
 							<input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} multiple />
 							<div className="flex items-center gap-3">
-								<div onClick={triggerFileInput} className="flex items-center justify-between w-full px-3 py-3 text-sm bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus-within:ring-2 focus-within:ring-blue-500">
+								<div onClick={triggerFileInput} className="flex items-center justify-between w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus-within:ring-2 focus-within:ring-blue-500">
 									<div className="flex items-center gap-2 text-gray-600">
 										<Upload className="w-4 h-4" />
 										{projectFiles && projectFiles.length > 0 ? (

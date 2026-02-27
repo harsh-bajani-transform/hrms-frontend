@@ -5,11 +5,12 @@
  */
 import React, { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
-import { ChevronDown, ChevronUp, Download, FileText, FileCheck, Users as UsersIcon, Search, X, RefreshCw, Calendar, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, FileText, FileCheck, Users as UsersIcon, Search, X, RefreshCw, RotateCcw } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { log, logError } from "../../config/environment";
+import { DateRangePicker } from "../common/CustomCalendar";
 
 // Helper to get today's date in YYYY-MM-DD format
 const getTodayDate = () => {
@@ -27,10 +28,6 @@ const QAAgentList = () => {
   
   // Per-agent date filter states
   const [agentDateFilters, setAgentDateFilters] = useState({});
-  
-  // Custom calendar picker states per agent
-  const [showStartPicker, setShowStartPicker] = useState({});
-  const [showEndPicker, setShowEndPicker] = useState({});
 
   // Project/task name mapping state
   const [projectNameMap, setProjectNameMap] = useState({});
@@ -223,24 +220,12 @@ const QAAgentList = () => {
     setSearchQuery("");
   };
 
-  // Convert yyyy-mm-dd to dd/mm/yyyy for display
-  const formatToDisplay = (dateStr) => {
-    if (!dateStr) return '';
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
-  // Convert dd/mm/yyyy to yyyy-mm-dd for storage
-  const formatToStorage = (day, month, year) => {
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
-  // Handle date selection from custom calendar for specific agent
-  const handleDateSelect = (agentId, name, dateValue) => {
+  // Handle date changes for specific agent
+  const handleAgentStartDateChange = (agentId, dateValue) => {
     const currentFilters = agentDateFilters[agentId] || { startDate: getTodayDate(), endDate: getTodayDate() };
     const newFilters = {
       ...currentFilters,
-      [name === 'start' ? 'startDate' : 'endDate']: dateValue
+      startDate: dateValue
     };
     
     setAgentDateFilters(prev => ({
@@ -248,11 +233,21 @@ const QAAgentList = () => {
       [agentId]: newFilters
     }));
     
-    if (name === 'start') {
-      setShowStartPicker(prev => ({ ...prev, [agentId]: false }));
-    } else if (name === 'end') {
-      setShowEndPicker(prev => ({ ...prev, [agentId]: false }));
-    }
+    // Fetch updated data with new dates immediately
+    fetchAgentTrackers(agentId, newFilters.startDate, newFilters.endDate);
+  };
+
+  const handleAgentEndDateChange = (agentId, dateValue) => {
+    const currentFilters = agentDateFilters[agentId] || { startDate: getTodayDate(), endDate: getTodayDate() };
+    const newFilters = {
+      ...currentFilters,
+      endDate: dateValue
+    };
+    
+    setAgentDateFilters(prev => ({
+      ...prev,
+      [agentId]: newFilters
+    }));
     
     // Fetch updated data with new dates immediately
     fetchAgentTrackers(agentId, newFilters.startDate, newFilters.endDate);
@@ -269,94 +264,6 @@ const QAAgentList = () => {
     fetchAgentTrackers(agentId, today, today);
   };
 
-  // Generate calendar days
-  const generateCalendar = (currentDate) => {
-    const date = currentDate ? new Date(currentDate) : new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    return { year, month, daysInMonth, startingDayOfWeek };
-  };
-
-  // Custom Date Picker Component
-  const CustomDatePicker = ({ name, value, onSelect, show, onClose }) => {
-    const [viewDate, setViewDate] = useState(value || new Date().toISOString().split('T')[0]);
-    const { year, month, daysInMonth, startingDayOfWeek } = generateCalendar(viewDate);
-    
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-    const handlePrevMonth = () => {
-      const newDate = new Date(year, month - 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    const handleNextMonth = () => {
-      const newDate = new Date(year, month + 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    if (!show) return null;
-
-    return (
-      <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64">
-        {/* Month/Year Header */}
-        <div className="flex items-center justify-between mb-3">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="font-bold text-sm text-slate-800">{monthNames[month]} {year}</span>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map(day => (
-            <div key={day} className="text-center text-xs font-bold text-slate-600">{day}</div>
-          ))}
-        </div>
-
-        {/* Calendar Days */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = formatToStorage(day, month + 1, year);
-            const isSelected = dateStr === value;
-            return (
-              <button
-                key={day}
-                onClick={() => onSelect(name, dateStr)}
-                className={`text-xs p-1.5 rounded hover:bg-blue-100 transition-colors ${
-                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
-                }`}
-              >
-                {day}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Close Button */}
-        <button 
-          onClick={onClose}
-          className="w-full mt-3 text-xs text-slate-600 hover:text-slate-800 font-semibold"
-        >
-          Close
-        </button>
-      </div>
-    );
-  };
-
   // Handle QC Form action
   const handleQCForm = (tracker) => {
     log('[QAAgentList] Opening QC Form for tracker:', tracker.tracker_id);
@@ -366,7 +273,7 @@ const QAAgentList = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 py-6 px-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-slate-200">
           <div className="flex items-center gap-4">
@@ -482,74 +389,27 @@ const QAAgentList = () => {
                       <div className="p-6 bg-slate-50/30">
                         {/* Date Range Filter for this agent */}
                         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 mb-4 border border-blue-200">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            {/* Start Date */}
-                            <div className="relative">
-                              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                                Start Date
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  value={formatToDisplay(agentDateFilters[agent.user_id]?.startDate || getTodayDate())}
-                                  readOnly
-                                  className="w-full px-3 py-2 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-all cursor-pointer"
-                                  placeholder="dd/mm/yyyy"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setShowStartPicker(prev => ({ ...prev, [agent.user_id]: !prev[agent.user_id] }))}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                                >
-                                  <Calendar className="w-4 h-4 text-blue-600" />
-                                </button>
-                                <CustomDatePicker 
-                                  name="start"
-                                  value={agentDateFilters[agent.user_id]?.startDate || getTodayDate()}
-                                  onSelect={(name, dateValue) => handleDateSelect(agent.user_id, name, dateValue)}
-                                  show={showStartPicker[agent.user_id]}
-                                  onClose={() => setShowStartPicker(prev => ({ ...prev, [agent.user_id]: false }))}
-                                />
-                              </div>
-                            </div>
-
-                            {/* End Date */}
-                            <div className="relative">
-                              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                                End Date
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  value={formatToDisplay(agentDateFilters[agent.user_id]?.endDate || getTodayDate())}
-                                  readOnly
-                                  className="w-full px-3 py-2 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-all cursor-pointer"
-                                  placeholder="dd/mm/yyyy"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setShowEndPicker(prev => ({ ...prev, [agent.user_id]: !prev[agent.user_id] }))}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                                >
-                                  <Calendar className="w-4 h-4 text-blue-600" />
-                                </button>
-                                <CustomDatePicker 
-                                  name="end"
-                                  value={agentDateFilters[agent.user_id]?.endDate || getTodayDate()}
-                                  onSelect={(name, dateValue) => handleDateSelect(agent.user_id, name, dateValue)}
-                                  show={showEndPicker[agent.user_id]}
-                                  onClose={() => setShowEndPicker(prev => ({ ...prev, [agent.user_id]: false }))}
-                                />
-                              </div>
+                          <div className="flex flex-wrap items-end gap-3">
+                            {/* Date Range Picker */}
+                            <div className="flex-1 min-w-[300px]">
+                              <DateRangePicker
+                                startDate={agentDateFilters[agent.user_id]?.startDate || getTodayDate()}
+                                endDate={agentDateFilters[agent.user_id]?.endDate || getTodayDate()}
+                                onStartDateChange={(dateValue) => handleAgentStartDateChange(agent.user_id, dateValue)}
+                                onEndDateChange={(dateValue) => handleAgentEndDateChange(agent.user_id, dateValue)}
+                                label="Date Range"
+                                description={null}
+                                showClearButton={false}
+                                compact={true}
+                                noWrapper={true}
+                              />
                             </div>
 
                             {/* Reset Button */}
                             <div className="flex items-end">
                               <button
                                 onClick={() => handleResetAgentFilters(agent.user_id)}
-                                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
                                 type="button"
                               >
                                 <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />

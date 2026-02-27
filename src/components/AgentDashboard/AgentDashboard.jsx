@@ -8,8 +8,8 @@ import { useDeviceInfo } from '../../hooks/useDeviceInfo';
 import { fileToBase64 } from "../../utils/fileToBase64";
 import { useAuth } from "../../context/AuthContext";
 import { log, logError } from "../../config/environment";
-import CustomSelect from "../common/CustomSelect";
-import { Briefcase, ListChecks } from "lucide-react";
+import SearchableSelect from "../common/SearchableSelect";
+import { Briefcase, ListChecks, Clock } from "lucide-react";
 
 
 
@@ -30,9 +30,11 @@ const AgentDashboard = ({ embedded = false }) => {
   const [viewAll, setViewAll] = useState(false);
   const [selectedProject, setSelectedProject] = useState("");
   const [selectedTask, setSelectedTask] = useState("");
+  const [shiftType, setShiftType] = useState("day");
   const [baseTarget, setBaseTarget] = useState("");
   const [baseTargetLoading, setBaseTargetLoading] = useState(false);
   const [productionTarget, setProductionTarget] = useState("");
+  const [trackerNote, setTrackerNote] = useState("");
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const [fileBase64, setFileBase64] = useState(null);
@@ -127,7 +129,8 @@ const AgentDashboard = ({ embedded = false }) => {
     const project = projects.find(p => String(p.project_id) === String(selectedProject));
     const task = project?.tasks?.find(t => String(t.task_id) === String(selectedTask));
     if (task && user.user_tenure) {
-      setBaseTarget(Number(task.task_target) * Number(user.user_tenure));
+      const calculated = Number(task.task_target) * Number(user.user_tenure);
+      setBaseTarget(calculated.toFixed(2));
     } else {
       setBaseTarget("");
     }
@@ -177,9 +180,13 @@ const AgentDashboard = ({ embedded = false }) => {
     const newErrors = {};
     if (!selectedProject) newErrors.selectedProject = "Project is required.";
     if (!selectedTask) newErrors.selectedTask = "Task is required.";
+    if (!shiftType) newErrors.shiftType = "Shift is required.";
     if (!baseTarget) newErrors.baseTarget = "Base Target is required.";
     if (!productionTarget) newErrors.productionTarget = "Production Target is required.";
     else if (isNaN(Number(productionTarget)) || Number(productionTarget) < 0) newErrors.productionTarget = "Enter a valid number.";
+    else if (baseTarget && Number(productionTarget) > (Number(baseTarget) * 2)) {
+      newErrors.productionTarget = `Production cannot exceed ${(Number(baseTarget) * 2).toFixed(2)} (double of base target).`;
+    }
     return newErrors;
   };
 
@@ -187,7 +194,7 @@ const AgentDashboard = ({ embedded = false }) => {
   useEffect(() => {
     setErrors(validate());
     // eslint-disable-next-line
-  }, [selectedProject, selectedTask, baseTarget, productionTarget]);
+  }, [selectedProject, selectedTask, shiftType, baseTarget, productionTarget]);
 
   // Handle blur for live validation
   const handleBlur = (field) => {
@@ -212,6 +219,7 @@ const AgentDashboard = ({ embedded = false }) => {
     setTouched({ 
       selectedProject: true, 
       selectedTask: true, 
+      shiftType: true,
       baseTarget: true, 
       productionTarget: true 
     });
@@ -234,7 +242,7 @@ const AgentDashboard = ({ embedded = false }) => {
       setSubmitting(true);
       
       // Validate again before submission to ensure all fields are present
-      if (!selectedProject || !selectedTask || !productionTarget) {
+      if (!selectedProject || !selectedTask || !shiftType || !productionTarget) {
         toast.error("Please fill in all required fields");
         setSubmitting(false);
         return;
@@ -244,9 +252,15 @@ const AgentDashboard = ({ embedded = false }) => {
       const formData = new FormData();
       formData.append('project_id', Number(selectedProject));
       formData.append('task_id', Number(selectedTask));
+      formData.append('shift', shiftType);
       formData.append('user_id', user?.user_id);
       formData.append('production', Number(productionTarget));
       formData.append('tenure_target', Number(baseTarget));
+      
+      // Add tracker_note if provided (optional field)
+      if (trackerNote && trackerNote.trim()) {
+        formData.append('tracker_note', trackerNote.trim());
+      }
       
       // Append the actual file if it exists
       if (file) {
@@ -275,6 +289,7 @@ const AgentDashboard = ({ embedded = false }) => {
           setSelectedTask("");
           setBaseTarget("");
           setProductionTarget("");
+          setTrackerNote("");
           setFile(null);
           setFilePreview(null);
           setFileBase64(null);
@@ -314,11 +329,11 @@ const AgentDashboard = ({ embedded = false }) => {
           onClose={handleBackToForm}
         />
       ) : (
-        <div className="space-y-8 max-w-[880px] mx-auto py-5">
+        <div className="space-y-8 max-w-7xl mx-auto py-5">
           {/* Data Entry Form */}
           <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
             {/* Modern Header */}
-            <div className="w-full max-w-[920px] bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl px-8 py-5 shadow-xl">
+            <div className="w-full max-w-7xl bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl px-8 py-5 shadow-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
@@ -346,11 +361,11 @@ const AgentDashboard = ({ embedded = false }) => {
 
             {/* Form Card */}
             <form
-              className="bg-white rounded-b-2xl shadow-2xl p-6 w-full max-w-[920px] border border-blue-50"
+              className="bg-white rounded-b-2xl shadow-2xl p-6 w-full max-w-7xl border border-blue-50"
               onSubmit={handleSubmit}
             >
               {/* Form Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
                 {/* Project Selection */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
@@ -363,7 +378,7 @@ const AgentDashboard = ({ embedded = false }) => {
                     Project Name
                     <span className="text-red-500">*</span>
                   </label>
-                  <CustomSelect
+                  <SearchableSelect
                     value={selectedProject}
                     onChange={(value) => {
                       setSelectedProject(value);
@@ -400,7 +415,7 @@ const AgentDashboard = ({ embedded = false }) => {
                     Task Name
                     <span className="text-red-500">*</span>
                   </label>
-                  <CustomSelect
+                  <SearchableSelect
                     value={selectedTask}
                     onChange={(value) => {
                       const taskValue = String(value);
@@ -411,7 +426,8 @@ const AgentDashboard = ({ embedded = false }) => {
                         const project = projects.find(p => String(p.project_id) === String(selectedProject));
                         const task = project?.tasks?.find(t => String(t.task_id) === String(taskValue));
                         if (task && user?.user_tenure) {
-                          setBaseTarget(Number(task.task_target) * Number(user.user_tenure));
+                          const calculated = Number(task.task_target) * Number(user.user_tenure);
+                          setBaseTarget(calculated.toFixed(2));
                         } else {
                           setBaseTarget("");
                         }
@@ -437,6 +453,42 @@ const AgentDashboard = ({ embedded = false }) => {
                   )}
                 </div>
 
+                {/* Shift Selection */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Shift
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <SearchableSelect
+                    value={shiftType}
+                    onChange={(value) => {
+                      setShiftType(value);
+                      handleBlur('shiftType');
+                    }}
+                    options={[
+                      { value: 'day', label: 'Day' },
+                      { value: 'night', label: 'Night' }
+                    ]}
+                    icon={Clock}
+                    placeholder="Select shift..."
+                    disabled={false}
+                  />
+                  {touched.shiftType && errors.shiftType && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      {errors.shiftType}
+                    </p>
+                  )}
+                </div>
+
                 {/* Base Target */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
@@ -450,11 +502,11 @@ const AgentDashboard = ({ embedded = false }) => {
                   </label>
                   <div className="relative">
                     <div className="w-full bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-300 rounded-lg px-4 py-3 text-sm font-bold text-slate-700 shadow-sm flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
                         <rect width="14" height="10" x="5" y="11" rx="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                       </svg>
-                      <span>{baseTargetLoading ? 'Calculating...' : (baseTarget ? baseTarget : '—')}</span>
+                      <span>{baseTargetLoading ? 'Calculating...' : (baseTarget ? Number(baseTarget).toFixed(2) : '—')}</span>
                     </div>
                   </div>
                   {touched.baseTarget && errors.baseTarget && (
@@ -479,15 +531,31 @@ const AgentDashboard = ({ embedded = false }) => {
                     Production
                     <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white"
-                    value={productionTarget}
-                    onChange={e => setProductionTarget(e.target.value)}
-                    onBlur={() => handleBlur('productionTarget')}
-                    placeholder="Enter production"
-                  />
+                  <div className="relative">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                      <line x1="12" x2="12" y1="2" y2="22"></line>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    <input
+                      type="text"
+                      className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white ${
+                        touched.productionTarget && errors.productionTarget
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                          : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                      }`}
+                      value={productionTarget}
+                      onChange={e => setProductionTarget(e.target.value)}
+                      onBlur={(e) => {
+                        handleBlur('productionTarget');
+                        // Format to 2 decimal places
+                        const value = e.target.value.trim();
+                        if (value && !isNaN(value)) {
+                          setProductionTarget(parseFloat(value).toFixed(2));
+                        }
+                      }}
+                      placeholder="Enter production"
+                    />
+                  </div>
                   {touched.productionTarget && errors.productionTarget && (
                     <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -499,64 +567,111 @@ const AgentDashboard = ({ embedded = false }) => {
                     </p>
                   )}
                 </div>
-              </div>
 
-              {/* File Upload Section */}
-              <div className="mb-5">
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                  </svg>
-                  Project Files
-                </label>
-                <div
-                  onClick={() => document.getElementById('custom-file-upload').click()}
-                  className={`relative border-2 border-dashed rounded-lg px-6 py-6 text-center transition-all cursor-pointer group ${
-                    fileError 
-                      ? 'border-red-300 bg-red-50/30 hover:border-red-400' 
-                      : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
-                  }`}
-                >
-                  <div className="flex flex-col items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors ${
-                      fileError ? 'bg-red-100' : 'bg-blue-100'
-                    }`}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={fileError ? 'text-red-600' : 'text-blue-600'}>
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" x2="12" y1="3" y2="15"></line>
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">
-                        {file ? (
-                          <span className="text-blue-600">{file.name}</span>
-                        ) : (
-                          <>Click to upload <span className="text-blue-600">or drag and drop</span></>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">Max file size: 10MB</p>
-                    </div>
-                  </div>
-                  <input
-                    id="custom-file-upload"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </div>
-                {fileError && (
-                  <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <line x1="12" x2="12" y1="8" y2="12"></line>
-                      <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                {/* File Upload Section - Spans 2 rows */}
+                <div className="space-y-2 md:row-span-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
                     </svg>
-                    {fileError}
-                  </p>
-                )}
+                    Project Files
+                  </label>
+                  <div
+                    onClick={() => document.getElementById('custom-file-upload').click()}
+                    className={`relative h-[182px] flex items-center justify-center border-2 border-dashed rounded-lg px-4 py-4 text-center transition-all cursor-pointer group ${
+                      fileError 
+                        ? 'border-red-300 bg-red-50/30 hover:border-red-400' 
+                        : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors ${
+                        fileError ? 'bg-red-100' : 'bg-blue-100'
+                      }`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={fileError ? 'text-red-600' : 'text-blue-600'}>
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="17 8 12 3 7 8"></polyline>
+                          <line x1="12" x2="12" y1="3" y2="15"></line>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">
+                          {file ? (
+                            <span className="text-blue-600 break-all">{file.name}</span>
+                          ) : (
+                            <>Click to <span className="text-blue-600">upload</span></>
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">Max: 10MB</p>
+                      </div>
+                    </div>
+                    <input
+                      id="custom-file-upload"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {fileError && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      {fileError}
+                    </p>
+                  )}
+                </div>
+
+                {/* Notes Field - Spans 2 columns */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="flex items-center justify-between text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    <span className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                      Notes
+                    </span>
+                    <span className={`text-xs font-medium ${
+                      trackerNote.length > 200 ? 'text-red-600' : 'text-slate-500'
+                    }`}>
+                      {trackerNote.length}/200
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-3 text-blue-600 pointer-events-none">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <textarea
+                      rows="3"
+                      maxLength="200"
+                      className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white resize-none ${
+                        trackerNote.length > 200 
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-100' 
+                          : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                      }`}
+                      value={trackerNote}
+                      onChange={e => setTrackerNote(e.target.value)}
+                      placeholder="Add any additional notes... (Optional)"
+                    />
+                  </div>
+                  {trackerNote.length > 200 && (
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" x2="12" y1="8" y2="12"></line>
+                        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                      </svg>
+                      Notes cannot exceed 200 characters
+                    </p>
+                  )}
+                </div>
+
               </div>
 
               {/* Action Buttons */}

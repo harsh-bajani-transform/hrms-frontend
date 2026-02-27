@@ -1,8 +1,7 @@
 // ...existing imports...
-import { useRef } from "react";
 import * as XLSX from 'xlsx';
 import { toast } from "react-hot-toast";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getFriendlyErrorMessage } from '../../utils/errorMessages';
 import ErrorMessage from '../common/ErrorMessage';
 import dayjs from "dayjs";
@@ -11,13 +10,105 @@ dayjs.extend(customParseFormat);
 import { fetchDailyBillableReport, fetchMonthlyBillableReport } from "../../services/billableReportService";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
-import { Download, Calendar, FileSpreadsheet, X, RotateCcw } from "lucide-react";
+import { Download, Calendar as CalendarIcon, FileSpreadsheet, X, RotateCcw, ChevronDown } from "lucide-react";
+import { DateRangePicker } from '../common/CustomCalendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 
 
 const BillableReport = () => {
   // Always call hooks at the top
   const { user } = useAuth();
+  
+  // Simple MonthPicker component for selecting month/year in YYYY-MM format
+  const MonthPicker = ({ value, onChange }) => {
+    const [showPicker, setShowPicker] = useState(false);
+    const [viewYear, setViewYear] = useState(() => {
+      if (value) {
+        const [year] = value.split('-');
+        return parseInt(year);
+      }
+      return new Date().getFullYear();
+    });
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const handleMonthSelect = (monthIndex) => {
+      const monthStr = String(monthIndex + 1).padStart(2, '0');
+      const dateStr = `${viewYear}-${monthStr}`;
+      onChange(dateStr);
+      setShowPicker(false);
+    };
+
+    const selectedMonth = value ? parseInt(value.split('-')[1]) - 1 : -1;
+    const selectedYear = value ? parseInt(value.split('-')[0]) : -1;
+
+    const displayValue = value ? (() => {
+      const [year, month] = value.split('-');
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${monthNames[parseInt(month) - 1]} ${year}`;
+    })() : 'Select Month';
+
+    return (
+      <div>
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-2">
+          <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
+          Month
+        </label>
+        <Popover open={showPicker} onOpenChange={setShowPicker}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="w-full bg-slate-50 border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-blue-50 hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-left flex items-center justify-between"
+            >
+              <span>{displayValue}</span>
+              <ChevronDown className="w-4 h-4 text-blue-600" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[280px] border-2 border-blue-200 bg-white p-4" align="start">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                type="button"
+                onClick={() => setViewYear(y => y - 1)}
+                className="p-1.5 hover:bg-slate-100 rounded transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <span className="font-bold text-sm text-slate-800">{viewYear}</span>
+              <button
+                type="button"
+                onClick={() => setViewYear(y => y + 1)}
+                className="p-1.5 hover:bg-slate-100 rounded transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {monthNames.map((month, index) => {
+                const isSelected = selectedYear === viewYear && selectedMonth === index;
+                return (
+                  <button
+                    key={month}
+                    type="button"
+                    onClick={() => handleMonthSelect(index)}
+                    className={cn(
+                      "text-sm p-2.5 rounded-lg transition-colors font-medium",
+                      isSelected
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-slate-700 hover:bg-blue-100"
+                    )}
+                  >
+                    {month}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  };
   // Export the visible monthly report table (with filters applied)
   const handleExportMonthlyTable = () => {
       try {
@@ -218,40 +309,8 @@ const BillableReport = () => {
   // State for month filter - default to current month
   const [monthFilter, setMonthFilter] = useState(() => getCurrentMonthRange().month);
   
-  // State for custom calendar picker visibility
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
-
-  // Refs for pickers
-  const startPickerRef = useRef(null);
-  const endPickerRef = useRef(null);
-  const monthPickerRef = useRef(null);
-
-  // Close pickers on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (showStartPicker && startPickerRef.current && !startPickerRef.current.contains(event.target)) {
-        setShowStartPicker(false);
-      }
-      if (showEndPicker && endPickerRef.current && !endPickerRef.current.contains(event.target)) {
-        setShowEndPicker(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showStartPicker, showEndPicker]);
-
-  // Close daily month picker on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (showMonthPicker && monthPickerRef.current && !monthPickerRef.current.contains(event.target)) {
-        setShowMonthPicker(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showMonthPicker]);
+  // Ref to track if we're updating dates from month filter to prevent infinite loop
+  const isUpdatingFromMonthFilter = useRef(false);
 
   // State for API data, loading, and error
   const [dailyData, setDailyData] = useState([]);
@@ -272,10 +331,25 @@ const BillableReport = () => {
         return `${y}-${m}-${d}`;
       };
       
+      isUpdatingFromMonthFilter.current = true;
       setStartDate(formatDate(firstDay));
       setEndDate(formatDate(lastDay));
+      setTimeout(() => {
+        isUpdatingFromMonthFilter.current = false;
+      }, 0);
     }
   }, [monthFilter]);
+
+  // Update month filter when start date changes (from date picker)
+  useEffect(() => {
+    if (startDate && !isUpdatingFromMonthFilter.current) {
+      const [year, month] = startDate.split('-');
+      const newMonthFilter = `${year}-${month}`;
+      if (newMonthFilter !== monthFilter) {
+        setMonthFilter(newMonthFilter);
+      }
+    }
+  }, [startDate, monthFilter]);
 
   // Fetch daily report data from API on mount or when date range/month changes
   useEffect(() => {
@@ -310,19 +384,6 @@ const BillableReport = () => {
   const [loadingMonthly, setLoadingMonthly] = useState(false);
   const [errorMonthly, setErrorMonthly] = useState(null);
   const [monthlyMonth, setMonthlyMonth] = useState(() => getCurrentMonthRange().month);
-  const [showMonthlyMonthPicker, setShowMonthlyMonthPicker] = useState(false);
-  const monthlyMonthPickerRef = useRef(null);
-
-  // Close monthly month picker on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (showMonthlyMonthPicker && monthlyMonthPickerRef.current && !monthlyMonthPickerRef.current.contains(event.target)) {
-        setShowMonthlyMonthPicker(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showMonthlyMonthPicker]);
 
   // Fetch monthly report data from API when monthly tab is active or month filter changes
   useEffect(() => {
@@ -427,240 +488,6 @@ const BillableReport = () => {
     }
   };
 
-  // Convert yyyy-mm-dd to dd/mm/yyyy for display
-  const formatToDisplay = (dateStr) => {
-    if (!dateStr) return '';
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
-  // Convert dd/mm/yyyy to yyyy-mm-dd for storage
-  const formatToStorage = (day, month, year) => {
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
-  // Handle date selection from custom calendar
-  const handleDateSelect = (name, dateValue) => {
-    if (name === 'start') {
-      setStartDate(dateValue);
-      setShowStartPicker(false);
-    } else if (name === 'end') {
-      setEndDate(dateValue);
-      setShowEndPicker(false);
-    }
-  };
-
-  // Generate calendar days
-  const generateCalendar = (currentDate) => {
-    const date = currentDate ? new Date(currentDate) : new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    return { year, month, daysInMonth, startingDayOfWeek };
-  };
-
-  const CustomDatePicker = ({ name, value, onSelect, show, onClose }) => {
-    const ref = name === 'start' ? startPickerRef : endPickerRef;
-    const [viewDate, setViewDate] = useState(value || new Date().toISOString().split('T')[0]);
-
-    // Sync viewDate with value only when picker opens
-    useEffect(() => {
-      if (show && value) setViewDate(value);
-      // eslint-disable-next-line
-    }, [show]); // Only depend on show to allow navigation while open
-
-    const { year, month, daysInMonth, startingDayOfWeek } = generateCalendar(viewDate);
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-    const handlePrevMonth = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      let prevMonth = month - 1;
-      let prevYear = year;
-      if (prevMonth < 0) {
-        prevMonth = 11;
-        prevYear = year - 1;
-      }
-      const newDate = new Date(prevYear, prevMonth, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    const handleNextMonth = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      let nextMonth = month + 1;
-      let nextYear = year;
-      if (nextMonth > 11) {
-        nextMonth = 0;
-        nextYear = year + 1;
-      }
-      const newDate = new Date(nextYear, nextMonth, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    if (!show) return null;
-
-    return (
-      <div ref={ref} className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64">
-        {/* Month/Year Header */}
-        <div className="flex items-center justify-between mb-3">
-          <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="font-bold text-sm text-slate-800">{monthNames[month]} {year}</span>
-          <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map(day => (
-            <div key={day} className="text-center text-xs font-bold text-slate-600">{day}</div>
-          ))}
-        </div>
-
-        {/* Calendar Days */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = formatToStorage(day, month + 1, year);
-            const isSelected = dateStr === value;
-            return (
-              <button
-                key={day}
-                onClick={() => {
-                  onSelect(name, dateStr);
-                  if (onClose) onClose();
-                }}
-                className={`text-xs p-1.5 rounded hover:bg-blue-100 transition-colors ${
-                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
-                }`}
-              >
-                {day}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Close Button */}
-        <button 
-          type="button"
-          onClick={onClose}
-          className="w-full mt-3 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Return
-        </button>
-      </div>
-    );
-  };
-
-  const CustomMonthPicker = ({ value, onSelect, show, onClose }) => {
-    // Use correct ref for daily/monthly picker
-    const ref = onSelect === setMonthFilter ? monthPickerRef : monthlyMonthPickerRef;
-    const [viewYear, setViewYear] = useState(() => {
-      if (value) {
-        const [year] = value.split('-');
-        return parseInt(year);
-      }
-      return new Date().getFullYear();
-    });
-
-    // Fix: allow forward navigation after going backward
-    useEffect(() => {
-      if (value) {
-        const [year] = value.split('-');
-        if (parseInt(year) !== viewYear) {
-          setViewYear(parseInt(year));
-        }
-      }
-      // eslint-disable-next-line
-    }, [value]);
-
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    const handlePrevYear = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setViewYear(y => y - 1);
-    };
-    
-    const handleNextYear = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setViewYear(y => y + 1);
-    };
-
-    const handleMonthSelect = (monthIndex) => {
-      const monthStr = String(monthIndex + 1).padStart(2, '0');
-      const dateStr = `${viewYear}-${monthStr}`;
-      onSelect(dateStr);
-      if (onClose) onClose();
-    };
-
-    if (!show) return null;
-
-    const selectedMonth = value ? parseInt(value.split('-')[1]) - 1 : -1;
-    const selectedYear = value ? parseInt(value.split('-')[0]) : -1;
-
-    return (
-      <div ref={ref} className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64">
-        {/* Year Header */}
-        <div className="flex items-center justify-between mb-3">
-          <button type="button" onClick={handlePrevYear} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="font-bold text-sm text-slate-800">{viewYear}</span>
-          <button type="button" onClick={handleNextYear} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-
-        {/* Months Grid */}
-        <div className="grid grid-cols-3 gap-2">
-          {monthNames.map((month, index) => {
-            const isSelected = selectedYear === viewYear && selectedMonth === index;
-            return (
-              <button
-                key={month}
-                onClick={() => handleMonthSelect(index)}
-                className={`text-xs p-2 rounded hover:bg-blue-100 transition-colors font-medium ${
-                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
-                }`}
-              >
-                {month}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Close Button */}
-        <button 
-          type="button"
-          onClick={onClose}
-          className="w-full mt-3 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Return
-        </button>
-      </div>
-    );
-  };
-
   return (
     <div className="max-w-7xl mx-auto py-6 px-2 sm:px-4">
       {/* Tabs Navigation - Match project theme */}
@@ -698,87 +525,22 @@ const BillableReport = () => {
               <div className="flex flex-col lg:flex-row lg:items-end gap-4">
                 {/* Date Range Section */}
                 <div className="flex-1">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-2">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    Date Range
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 relative">
-                      <input 
-                        type="text"
-                        readOnly
-                        className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-medium rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white cursor-pointer" 
-                        value={formatToDisplay(startDate)} 
-                        onClick={() => {
-                          setShowStartPicker(!showStartPicker);
-                          setShowEndPicker(false);
-                        }}
-                        placeholder="DD/MM/YYYY"
-                      />
-                      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      <CustomDatePicker 
-                        name="start"
-                        value={startDate}
-                        onSelect={handleDateSelect}
-                        show={showStartPicker}
-                        onClose={() => setShowStartPicker(false)}
-                      />
-                    </div>
-                    <span className="text-slate-500 font-semibold text-sm">to</span>
-                    <div className="flex-1 relative">
-                      <input 
-                        type="text"
-                        readOnly
-                        className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-medium rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white cursor-pointer" 
-                        value={formatToDisplay(endDate)} 
-                        onClick={() => {
-                          setShowEndPicker(!showEndPicker);
-                          setShowStartPicker(false);
-                        }}
-                        placeholder="DD/MM/YYYY"
-                      />
-                      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      <CustomDatePicker 
-                        name="end"
-                        value={endDate}
-                        onSelect={handleDateSelect}
-                        show={showEndPicker}
-                        onClose={() => setShowEndPicker(false)}
-                      />
-                    </div>
-                  </div>
+                  <DateRangePicker
+                    startDate={startDate}
+                    endDate={endDate}
+                    onStartDateChange={setStartDate}
+                    onEndDateChange={setEndDate}
+                    noWrapper={true}
+                    showClearButton={false}
+                  />
                 </div>
                 
                 {/* Month Filter */}
-                <div className="flex-1 lg:flex-none lg:w-48 relative">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-2">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    Month
-                  </label>
-                  <div ref={monthPickerRef} className="relative">
-                    <input
-                      type="text"
-                      readOnly
-                      className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-medium rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white cursor-pointer"
-                      value={monthFilter ? (() => {
-                        const [year, month] = monthFilter.split('-');
-                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                        return `${monthNames[parseInt(month) - 1]} ${year}`;
-                      })() : ''}
-                      onClick={() => setShowMonthPicker(!showMonthPicker)}
-                      placeholder="Select Month"
-                    />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <CustomMonthPicker
-                      value={monthFilter}
-                      onSelect={(dateStr) => {
-                        setMonthFilter(dateStr);
-                        setShowMonthPicker(false);
-                      }}
-                      show={showMonthPicker}
-                      onClose={() => setShowMonthPicker(false)}
-                    />
-                  </div>
+                <div className="flex-1 lg:flex-none lg:w-48">
+                  <MonthPicker
+                    value={monthFilter}
+                    onChange={setMonthFilter}
+                  />
                 </div>
                 
                 {/* Action Buttons */}
@@ -904,34 +666,10 @@ const BillableReport = () => {
           <div className="bg-white rounded-xl shadow-md border border-blue-100 p-6 mb-6">
             <div className="flex flex-col sm:flex-row sm:items-end gap-4">
               {/* Month Filter */}
-              <div className="flex-1 sm:flex-none sm:w-64 relative">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase mb-2">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                  Select Month
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    readOnly
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-medium rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white cursor-pointer"
-                    value={monthlyMonth ? (() => {
-                      const [year, month] = monthlyMonth.split('-');
-                      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                      return `${monthNames[parseInt(month) - 1]} ${year}`;
-                    })() : ''}
-                    onClick={() => setShowMonthlyMonthPicker(!showMonthlyMonthPicker)}
-                    placeholder="Select Month"
-                  />
-                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
-                <CustomMonthPicker
+              <div className="flex-1 sm:flex-none sm:w-64">
+                <MonthPicker
                   value={monthlyMonth}
-                  onSelect={(dateStr) => {
-                    setMonthlyMonth(dateStr);
-                    setShowMonthlyMonthPicker(false);
-                  }}
-                  show={showMonthlyMonthPicker}
-                  onClose={() => setShowMonthlyMonthPicker(false)}
+                  onChange={setMonthlyMonth}
                 />
               </div>
               

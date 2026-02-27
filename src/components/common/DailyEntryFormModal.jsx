@@ -205,7 +205,7 @@ const DailyEntryFormModal = ({
             </h2>
             {user && (
               <p className="text-blue-100 text-sm mt-1">
-                {user.user_name || user.name} - {user.team_name || "Team B"}
+                {user.user_name || user.name}
               </p>
             )}
           </div>
