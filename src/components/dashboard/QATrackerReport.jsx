@@ -62,6 +62,7 @@ const QATrackerReport = () => {
   const [editProjects, setEditProjects] = useState([]);
   const [editTasks, setEditTasks] = useState([]);
   const [editFormData, setEditFormData] = useState({
+    tracker_datetime: "",
     project_id: "",
     task_id: "",
     shift_type: "",
@@ -729,8 +730,28 @@ const QATrackerReport = () => {
       
       log('[QATrackerReport] Normalized shift value:', normalizedShift);
       
+      // Format tracker date_time to YYYY-MM-DDTHH:mm format for datetime-local input
+      // Use UTC methods to match the table display
+      let formattedDateTime = '';
+      if (tracker.date_time) {
+        try {
+          const dateObj = new Date(tracker.date_time);
+          // Format to YYYY-MM-DDTHH:mm using UTC methods (to match table display)
+          const year = dateObj.getUTCFullYear();
+          const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getUTCDate()).padStart(2, '0');
+          const hours = String(dateObj.getUTCHours()).padStart(2, '0');
+          const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
+          formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+          log('[QATrackerReport] Formatted date_time (UTC):', formattedDateTime, 'from:', tracker.date_time);
+        } catch (err) {
+          logError('[QATrackerReport] Error formatting date_time:', err);
+        }
+      }
+      
       // Set form data with existing values from tracker
       setEditFormData({
+        tracker_datetime: formattedDateTime,
         project_id: tracker.project_id || "",
         task_id: tracker.task_id || "",
         shift_type: normalizedShift,
@@ -912,7 +933,7 @@ const QATrackerReport = () => {
     e.preventDefault();
 
     // Validate required fields
-    if (!editFormData.project_id || !editFormData.task_id || !editFormData.production) {
+    if (!editFormData.tracker_datetime || !editFormData.project_id || !editFormData.task_id || !editFormData.production) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -934,6 +955,17 @@ const QATrackerReport = () => {
       // Create FormData for multipart/form-data upload
       const formData = new FormData();
       formData.append('tracker_id', editingTracker.tracker_id);
+      
+      // Format date_time to MySQL DATETIME format (YYYY-MM-DD HH:mm:ss)
+      // Input format is YYYY-MM-DDTHH:mm (from datetime-local input in UTC)
+      if (editFormData.tracker_datetime) {
+        // Simply replace 'T' with space and add seconds
+        // Input: "2026-02-25T13:34" -> Output: "2026-02-25 13:34:00"
+        const formattedDateTime = editFormData.tracker_datetime.replace('T', ' ') + ':00';
+        formData.append('date_time', formattedDateTime);
+        log('[QATrackerReport] Formatted date_time for submission:', formattedDateTime, 'from input:', editFormData.tracker_datetime);
+      }
+      
       formData.append('project_id', Number(editFormData.project_id));
       formData.append('task_id', Number(editFormData.task_id));
       formData.append('shift', editFormData.shift_type);
@@ -964,6 +996,7 @@ const QATrackerReport = () => {
         setShowEditModal(false);
         setEditingTracker(null);
         setEditFormData({
+          tracker_datetime: "",
           project_id: "",
           task_id: "",
           production: "",
@@ -993,6 +1026,7 @@ const QATrackerReport = () => {
     setShowEditModal(false);
     setEditingTracker(null);
     setEditFormData({
+      tracker_datetime: "",
       project_id: "",
       task_id: "",
       shift_type: "",
@@ -1562,6 +1596,112 @@ const QATrackerReport = () => {
                   <>
                     {/* Form Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
+                      {/* Date & Time Selection */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                          <Calendar className="w-4 h-4 text-blue-600" />
+                          Date & Time
+                          <span className="text-red-500">*</span>
+                        </label>
+                        
+                        {/* Date Picker */}
+                        <div className="relative cursor-pointer mb-2">
+                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-600 pointer-events-none" />
+                          <input
+                            type="date"
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-10 pr-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white cursor-pointer"
+                            value={editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : ''}
+                            onChange={(e) => {
+                              const date = e.target.value;
+                              const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                              setEditFormData(prev => ({ ...prev, tracker_datetime: date ? `${date}T${time}` : '' }));
+                            }}
+                            max={new Date().toISOString().split('T')[0]}
+                          />
+                        </div>
+                        
+                        {/* Time Picker - 12 Hour Format */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {/* Hour Dropdown */}
+                          <div className="relative">
+                            <select
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white"
+                              value={editFormData.tracker_datetime ? (() => {
+                                const time = editFormData.tracker_datetime.split('T')[1] || '00:00';
+                                let hour = parseInt(time.split(':')[0]);
+                                if (hour === 0) return 12;
+                                if (hour > 12) return hour - 12;
+                                return hour;
+                              })() : 12}
+                              onChange={(e) => {
+                                const date = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                                const currentHour = parseInt(time.split(':')[0]);
+                                const minute = time.split(':')[1];
+                                const isPM = currentHour >= 12;
+                                let newHour = parseInt(e.target.value);
+                                if (isPM && newHour !== 12) newHour += 12;
+                                else if (!isPM && newHour === 12) newHour = 0;
+                                setEditFormData(prev => ({ ...prev, tracker_datetime: `${date}T${String(newHour).padStart(2, '0')}:${minute}` }));
+                              }}
+                            >
+                              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(hour => (
+                                <option key={hour} value={hour}>{hour}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          {/* Minute Dropdown */}
+                          <div className="relative">
+                            <select
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white"
+                              value={editFormData.tracker_datetime ? (editFormData.tracker_datetime.split('T')[1] || '00:00').split(':')[1] : '00'}
+                              onChange={(e) => {
+                                const date = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                                const hour = time.split(':')[0];
+                                setEditFormData(prev => ({ ...prev, tracker_datetime: `${date}T${hour}:${e.target.value}` }));
+                              }}
+                            >
+                              {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(min => (
+                                <option key={min} value={min}>{min}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          {/* AM/PM Dropdown */}
+                          <div className="relative">
+                            <select
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white"
+                              value={editFormData.tracker_datetime ? (() => {
+                                const time = editFormData.tracker_datetime.split('T')[1] || '00:00';
+                                const hour = parseInt(time.split(':')[0]);
+                                return hour >= 12 ? 'PM' : 'AM';
+                              })() : 'AM'}
+                              onChange={(e) => {
+                                const date = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                                let hour = parseInt(time.split(':')[0]);
+                                const minute = time.split(':')[1];
+                                const newIsPM = e.target.value === 'PM';
+                                const currentIsPM = hour >= 12;
+                                
+                                if (newIsPM && !currentIsPM) {
+                                  hour = hour === 12 ? 12 : hour + 12;
+                                } else if (!newIsPM && currentIsPM) {
+                                  hour = hour === 12 ? 0 : hour - 12;
+                                }
+                                
+                                setEditFormData(prev => ({ ...prev, tracker_datetime: `${date}T${String(hour).padStart(2, '0')}:${minute}` }));
+                              }}
+                            >
+                              <option value="AM">AM</option>
+                              <option value="PM">PM</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Project Selection */}
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
