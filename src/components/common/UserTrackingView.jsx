@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from './LoadingSpinner';
+import SearchableSelect from './SearchableSelect';
 
 const UserTrackingView = () => {
   const { user } = useAuth();
@@ -13,7 +14,6 @@ const UserTrackingView = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [roleOptions, setRoleOptions] = useState([]);
   const [updatingPermission, setUpdatingPermission] = useState(null);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
   // Fetch users and roles on mount
   useEffect(() => {
@@ -208,40 +208,11 @@ const UserTrackingView = () => {
     }
   };
 
-  // Custom Dropdown Component
-  const CustomDropdown = ({ options, value, onChange, placeholder, show, onClose }) => {
-    if (!show) return null;
-
-    return (
-      <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 max-h-60 overflow-y-auto">
-        <div
-          className="px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer transition-colors"
-          onClick={() => {
-            onChange('all');
-            onClose();
-          }}
-        >
-          {placeholder}
-        </div>
-        {options.map((option) => (
-          <div
-            key={option.role_id}
-            className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
-              String(value) === String(option.role_id)
-                ? 'bg-blue-100 text-blue-900 font-semibold'
-                : 'text-slate-700 hover:bg-blue-50'
-            }`}
-            onClick={() => {
-              onChange(option.role_id);
-              onClose();
-            }}
-          >
-            {option.label}
-          </div>
-        ))}
-      </div>
-    );
-  };
+  // Format role options for SearchableSelect
+  const formattedRoleOptions = [
+    { value: 'all', label: 'All Roles' },
+    ...roleOptions.map(role => ({ value: String(role.role_id), label: role.label }))
+  ];
 
   if (loading) {
     return <LoadingSpinner />;
@@ -281,37 +252,15 @@ const UserTrackingView = () => {
             </div>
 
             {/* Role Filter Dropdown */}
-            <div className="relative">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                  className="w-full sm:w-48 px-3 py-2.5 pr-10 text-sm text-left border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all hover:border-blue-400"
-                >
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-blue-600" />
-                    <span className={roleFilter === 'all' ? 'text-slate-500' : 'text-slate-700 font-medium'}>
-                      {roleFilter === 'all' 
-                        ? 'All Roles' 
-                        : roleOptions.find(opt => String(opt.role_id) === String(roleFilter))?.label || 'All Roles'
-                      }
-                    </span>
-                  </div>
-                </button>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-blue-600 transition-transform ${showRoleDropdown ? 'rotate-180' : ''}`}>
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
-                <CustomDropdown
-                  options={roleOptions}
-                  value={roleFilter}
-                  onChange={setRoleFilter}
-                  placeholder="All Roles"
-                  show={showRoleDropdown}
-                  onClose={() => setShowRoleDropdown(false)}
-                />
-              </div>
+            <div className="w-full sm:w-48">
+              <SearchableSelect
+                value={roleFilter}
+                onChange={setRoleFilter}
+                options={formattedRoleOptions}
+                icon={Filter}
+                placeholder="All Roles"
+                isClearable={false}
+              />
             </div>
           </div>
         </div>

@@ -13,7 +13,6 @@ const AgentTabsNavigation = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutGrid },
     { id: 'billable_report', label: 'Billable Report', icon: Briefcase },
-    { id: 'agents', label: 'Agent Performance', icon: Users, disabled: true },
     { id: 'adherence', label: 'Reporting Adherence', icon: FileWarning, disabled: true },
     { id: 'incentives', label: 'Agent Incentives', icon: DollarSign, disabled: true }
   ];

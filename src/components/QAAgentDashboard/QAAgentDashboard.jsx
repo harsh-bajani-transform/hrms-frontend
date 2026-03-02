@@ -299,7 +299,7 @@ const QAAgentDashboard = ({ embedded = false }) => {
   }, [pendingFiles]);
 
   const content = (
-    <div className="space-y-4 max-w-6xl mx-auto pb-10">
+    <div className="space-y-4 max-w-7xl mx-auto pb-10">
       {/* Tabs Navigation */}
       <QATabsNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
       
@@ -320,7 +320,7 @@ const QAAgentDashboard = ({ embedded = false }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-[120px]">
               <StatCard
                 icon={Users}
-                title="Total Agents"
+                title="Total ActiveS Agents"
                 value={stats.totalAgents}
                 subtext="Assigned agents"
                 trend="neutral"

@@ -3,28 +3,44 @@ import api from "./api";
 
 /**
  * Create Task API
- * @param {Object} payload
+ * @param {Object|FormData} payload
  */
 export const addTask = async (payload) => {
-  const res = await api.post("/task/add", payload);
+  // If payload is FormData, set Content-Type to undefined to let browser set boundary
+  const headers = payload instanceof FormData ? { 'Content-Type': undefined } : {};
+  const res = await api.post("/task/add", payload, { headers });
   return res.data;
 };
 
 /**
  * Fetch project tasks API
  * @param {number} projectId
+ * @param {number} userId - Logged in user ID
+ * @param {string} deviceId - Device ID
+ * @param {string} deviceType - Device type (e.g., LAPTOP)
  */
-export const fetchProjectTasks = async (projectId) => {
-  const res = await api.post("/task/list", { project_id: projectId });
+export const fetchProjectTasks = async (projectId, userId, deviceId, deviceType) => {
+  const payload = {
+    project_id: projectId
+  };
+  
+  // Add optional user and device info if provided
+  if (userId) payload.user_id = userId;
+  if (deviceId) payload.device_id = deviceId;
+  if (deviceType) payload.device_type = deviceType;
+  
+  const res = await api.post("/task/list", payload);
   return res.data;
 };
 
 /**
  * Update task API
- * @param {Object} payload
+ * @param {Object|FormData} payload
  */
 export const updateTask = async (payload) => {
-  const res = await api.put("/task/update", payload);
+  // If payload is FormData, set Content-Type to undefined to let browser set boundary
+  const headers = payload instanceof FormData ? { 'Content-Type': undefined } : {};
+  const res = await api.post("/task/update", payload, { headers });
   return res.data;
 };
 
@@ -90,7 +106,7 @@ export const updateProject = async (projectId, payload) => {
  * @param {number} projectId
  */
 export const deleteProject = async (projectId) => {
-  const res = await api.put("/project/delete", {
+  const res = await api.post("/project/delete", {
     project_id: projectId
   });
   return res.data;

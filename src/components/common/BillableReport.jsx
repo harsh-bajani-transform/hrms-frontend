@@ -6,10 +6,14 @@ import { fetchDropdown } from "../../services/dropdownService";
 import { useAuth } from "../../context/AuthContext";
 import MonthCard from "./MonthCard";
 import UserCard from "./UserCard";
+import SearchableSelect from "./SearchableSelect";
 import { fetchMonthlyBillableReport } from "../../services/billableReportService";
 import api from "../../services/api";
 import { useDeviceInfo } from "../../hooks/useDeviceInfo";
 import { Users, Calendar, Download, RotateCcw } from "lucide-react";
+import { Calendar as CalendarComponent } from "../ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { format } from "date-fns";
 
 const BillableReport = ({ userId }) => {
   // Device info (declare once at top)
@@ -26,6 +30,11 @@ const BillableReport = ({ userId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showMonthlyMonthPicker, setShowMonthlyMonthPicker] = useState(false);
+
+  // Team filter state
+  const [selectedTeam, setSelectedTeam] = useState('all');
+  const [teams, setTeams] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
 
   // Refs for pickers
   const monthPickerRef = useRef(null);
@@ -49,6 +58,12 @@ const BillableReport = ({ userId }) => {
   // Check if user is Assistant Manager
   const isAssistantManager = user?.role_id === 4 || 
     (user?.role_name || user?.role || '').toLowerCase().includes('assistant');
+
+  // Check if user can view team filter (Admin, Super Admin, Project Manager)
+  const isAdmin = user?.role_id === 1;
+  const isSuperAdmin = (user?.role_name || user?.role || '').toLowerCase().includes('super');
+  const isProjectManager = user?.role_id === 3;
+  const canViewTeamFilter = isAdmin || isSuperAdmin || isProjectManager;
 
   // Export all users' daily data (filtered by search query if set)
   function handleExportAllUsers() {
@@ -283,6 +298,38 @@ const BillableReport = ({ userId }) => {
   // Store user information persistently (so cards remain visible even with no data)
   const [userInfoMap, setUserInfoMap] = useState({});
 
+  // Fetch teams dropdown for team filter (Admin, Super Admin, Project Manager only)
+  useEffect(() => {
+    const loadTeams = async () => {
+      if (!canViewTeamFilter) {
+        console.log('User cannot view team filter');
+        setTeams([]);
+        return;
+      }
+      
+      setLoadingTeams(true);
+      try {
+        console.log('Fetching teams for user:', user?.user_id);
+        const response = await api.post('/dropdown/get', {
+          logged_in_user_id: user?.user_id,
+          dropdown_type: 'teams'
+        });
+        console.log('Teams API response:', response.data);
+        const teamsData = response.data?.data || [];
+        console.log('Teams data extracted:', teamsData);
+        setTeams(teamsData);
+      } catch (error) {
+        console.error('Error fetching teams:', error);
+        setTeams([]);
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+    if (user?.user_id) {
+      loadTeams();
+    }
+  }, [user?.user_id, canViewTeamFilter]);
+
   // Reset user map when month filter changes (not for search query changes)
   React.useEffect(() => {
     setUserInfoMap({});
@@ -323,6 +370,10 @@ const BillableReport = ({ userId }) => {
           const monthLabel = monthNames[Number(month) - 1];
           payload.month_year = `${monthLabel}${year}`;
         }
+        // Team filter
+        if (selectedTeam && selectedTeam !== 'all') {
+          payload.team_id = Number(selectedTeam);
+        }
         // User filter (if userId is passed as prop)
         if (userId) payload.user_id = userId;
         // Call the /tracker/view_daily API
@@ -356,7 +407,7 @@ const BillableReport = ({ userId }) => {
     };
     fetchData();
     // eslint-disable-next-line
-  }, [userId, dailyMonth, refreshTrigger]);
+  }, [userId, dailyMonth, selectedTeam, refreshTrigger]);
 
   // Function to refresh daily data
   const handleRefreshData = () => {
@@ -506,64 +557,8 @@ const BillableReport = ({ userId }) => {
 
   // Removed unused handleExportDailyExcel and related code
 
-  // Custom Dropdown Component
-  const CustomDropdown = ({ options, value, onChange, placeholder, show, onClose }) => {
-    if (!show) return null;
-
-    return (
-      <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 max-h-60 overflow-y-auto">
-        {/* All option */}
-        <div
-          onClick={() => {
-            onChange('');
-            onClose();
-          }}
-          className={`px-4 py-2.5 cursor-pointer transition-all border-b border-slate-100 ${
-            !value ? 'bg-blue-50 text-blue-700 font-semibold' : 'hover:bg-blue-50 text-slate-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {!value && (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            )}
-            <span className="text-sm">{placeholder}</span>
-          </div>
-        </div>
-        
-        {/* Options */}
-        {options.map((option) => (
-          <div
-            key={option.value}
-            onClick={() => {
-              onChange(option.value);
-              onClose();
-            }}
-            className={`px-4 py-2.5 cursor-pointer transition-all ${
-              String(value) === String(option.value)
-                ? 'bg-blue-50 text-blue-700 font-semibold'
-                : 'hover:bg-blue-50 text-slate-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {String(value) === String(option.value) && (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              )}
-              <span className="text-sm">{option.label}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // Custom Month Picker Component
-  const CustomMonthPicker = ({ value, onChange, show, onClose }) => {
-    // Use correct ref for daily/monthly picker
-    const ref = onChange === setDailyMonth ? monthPickerRef : monthlyMonthPickerRef;
+  // Month-Year Picker Component (Only Month/Year Selection - No Dates)
+  const MonthPickerComponent = ({ value, onChange, show, onClose }) => {
     const [viewYear, setViewYear] = useState(() => {
       if (value) {
         const [year] = value.split('-');
@@ -577,9 +572,21 @@ const BillableReport = ({ userId }) => {
     const currentMonth = new Date().getMonth();
 
     const handlePrevYear = () => setViewYear(viewYear - 1);
-    const handleNextYear = () => setViewYear(viewYear + 1);
+    const handleNextYear = () => {
+      if (viewYear < currentYear) {
+        setViewYear(viewYear + 1);
+      }
+    };
+
+    const handleYearChange = (e) => {
+      setViewYear(parseInt(e.target.value));
+    };
 
     const handleMonthSelect = (monthIndex) => {
+      // Check if selecting a future month
+      const isFutureMonth = viewYear > currentYear || (viewYear === currentYear && monthIndex > currentMonth);
+      if (isFutureMonth) return;
+      
       const monthStr = String(monthIndex + 1).padStart(2, '0');
       onChange(`${viewYear}-${monthStr}`);
       onClose();
@@ -589,34 +596,78 @@ const BillableReport = ({ userId }) => {
 
     const [selectedYear, selectedMonth] = value ? value.split('-').map(Number) : [null, null];
 
+    // Generate year options (current year - 10 to current year)
+    const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - 10 + i);
+
     return (
-      <div ref={ref} className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-4 w-72">
-        {/* Year Header */}
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={handlePrevYear} className="p-1.5 hover:bg-slate-100 rounded transition">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+      <div className="absolute z-50 mt-1 bg-white rounded-xl shadow-2xl border-2 border-blue-300 p-3 w-64">
+        {/* Year Header with Navigation and Dropdown */}
+        <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-blue-100 gap-2">
+          <button 
+            onClick={handlePrevYear} 
+            className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0"
+            title="Previous Year"
+            type="button"
+          >
+            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <span className="font-bold text-base text-slate-800">{viewYear}</span>
-          <button onClick={handleNextYear} className="p-1.5 hover:bg-slate-100 rounded transition">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          
+          {/* Year Dropdown */}
+          <select
+            value={viewYear}
+            onChange={handleYearChange}
+            className="flex-1 px-2 py-1.5 text-sm font-bold text-slate-800 bg-blue-50 border-2 border-blue-300 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer text-center"
+          >
+            {yearOptions.map((y) => {
+              const isYearDisabled = y > currentYear;
+              return (
+                <option key={y} value={y} disabled={isYearDisabled}>
+                  {y}
+                </option>
+              );
+            })}
+          </select>
+          
+          <button 
+            onClick={handleNextYear}
+            disabled={viewYear >= currentYear}
+            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+              viewYear >= currentYear 
+                ? 'opacity-50 cursor-not-allowed bg-slate-100' 
+                : 'hover:bg-blue-50'
+            }`}
+            title={viewYear >= currentYear ? "Cannot select future dates" : "Next Year"}
+            type="button"
+          >
+            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
 
-        {/* Month Grid */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        {/* Month Grid - 3 columns */}
+        <div className="grid grid-cols-3 gap-1.5 mb-3">
           {monthNames.map((month, index) => {
             const isSelected = selectedYear === viewYear && selectedMonth === index + 1;
             const isCurrent = viewYear === currentYear && index === currentMonth;
+            const isFutureMonth = viewYear > currentYear || (viewYear === currentYear && index > currentMonth);
+            
             return (
               <button
                 key={month}
+                type="button"
                 onClick={() => handleMonthSelect(index)}
-                className={`text-sm py-3 px-2 rounded-lg font-semibold transition-all ${
-                  isSelected 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : isCurrent
-                    ? 'bg-blue-50 text-blue-700 border border-blue-300'
-                    : 'text-slate-700 hover:bg-blue-50 border border-transparent'
+                disabled={isFutureMonth}
+                className={`text-xs py-2 px-1.5 rounded-lg font-bold transition-all ${
+                  isFutureMonth
+                    ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                    : isSelected 
+                      ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg scale-105' 
+                      : isCurrent
+                        ? 'bg-blue-100 text-blue-700 border-2 border-blue-400 hover:bg-blue-200 shadow-sm'
+                        : 'bg-blue-50 text-slate-700 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-400 hover:shadow-md'
                 }`}
               >
                 {month}
@@ -629,43 +680,48 @@ const BillableReport = ({ userId }) => {
         <button 
           type="button"
           onClick={onClose}
-          className="w-full px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+          className="w-full px-3 py-2 bg-gradient-to-r from-slate-100 to-slate-200 hover:from-slate-200 hover:to-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-all border-2 border-slate-300 shadow-sm hover:shadow-md"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Return
+          Close
         </button>
       </div>
     );
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-2 sm:px-4">
-      <div className="w-full max-w-7xl mx-auto bg-white rounded-xl shadow-sm border border-blue-100 p-2 mb-6">
-        <div className="flex items-center gap-2">
-          <button
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${activeToggle === 'daily' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md' : 'text-blue-700 hover:bg-blue-50'}`}
-            onClick={() => setActiveToggle('daily')}
-          >
-            Daily Report
-          </button>
-          <button
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${activeToggle === 'monthly' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md' : 'text-blue-700 hover:bg-blue-50'}`}
-            onClick={() => setActiveToggle('monthly')}
-          >
-            Monthly Report
-          </button>
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg p-6">
+          <h2 className="text-2xl font-bold text-white">Billable Report</h2>
+          <p className="text-blue-100 text-sm mt-1">View daily and monthly billable hours and performance metrics</p>
         </div>
-      </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl shadow-md border-2 border-blue-100 p-6">
+          <div className="flex items-center gap-2">
+            <button
+              className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 border-2 ${activeToggle === 'daily' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md border-blue-700' : 'text-blue-700 hover:bg-blue-50 border-blue-200 hover:border-blue-400'}`}
+              onClick={() => setActiveToggle('daily')}
+            >
+              Daily Report
+            </button>
+            <button
+              className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 border-2 ${activeToggle === 'monthly' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md border-blue-700' : 'text-blue-700 hover:bg-blue-50 border-blue-200 hover:border-blue-400'}`}
+              onClick={() => setActiveToggle('monthly')}
+            >
+              Monthly Report
+            </button>
+          </div>
+        </div>
       {/* Daily Report view (user cards, QA agent side only) */}
       {activeToggle === 'daily' && (
         <div className="w-full max-w-7xl mx-auto mt-4">
           {/* Filter Section - Enhanced Design */}
           <div className="bg-white rounded-xl shadow-md border border-blue-100 p-6 mb-6">
             <div className="flex flex-wrap items-end gap-4">
-              {/* Search Filter - Expanded Width */}
-              <div className="relative flex-1 min-w-[250px]">
+              {/* Search Filter */}
+              <div className="relative w-96">
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-blue-600" />
                   Search Agent
@@ -685,7 +741,7 @@ const BillableReport = ({ userId }) => {
                   <Calendar className="w-4 h-4 text-blue-600" />
                   Month
                 </label>
-                <div className="relative">
+                <div className="relative" ref={monthPickerRef}>
                   <input
                     type="text"
                     value={dailyMonth ? (() => {
@@ -705,7 +761,7 @@ const BillableReport = ({ userId }) => {
                   >
                     <Calendar className="w-4 h-4 text-blue-600" />
                   </button>
-                  <CustomMonthPicker
+                  <MonthPickerComponent
                     value={dailyMonth}
                     onChange={(val) => setDailyMonth(val)}
                     show={showMonthPicker}
@@ -714,11 +770,37 @@ const BillableReport = ({ userId }) => {
                 </div>
               </div>
               
+              {/* Team Filter (Admin, Super Admin, Project Manager only) */}
+              {canViewTeamFilter && (
+                <div className="relative w-[220px]">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    Team
+                  </label>
+                  <SearchableSelect
+                    options={(() => {
+                      const opts = [
+                        { value: 'all', label: 'All Teams' },
+                        ...teams.map(team => ({ value: String(team.team_id), label: team.label }))
+                      ];
+                      console.log('SearchableSelect options:', opts);
+                      console.log('teams state:', teams);
+                      return opts;
+                    })()}
+                    value={selectedTeam}
+                    onChange={(val) => setSelectedTeam(val)}
+                    placeholder={loadingTeams ? "Loading teams..." : "Select team"}
+                    disabled={loadingTeams}
+                  />
+                </div>
+              )}
+              
               {/* Reset Filters Button */}
               <button
                 onClick={() => {
                   setSearchQuery('');
                   setDailyMonth(getCurrentMonth());
+                  setSelectedTeam('all');
                 }}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg px-6 py-2.5 transition-all shadow-sm hover:shadow-md group"
                 type="button"
@@ -779,6 +861,8 @@ const BillableReport = ({ userId }) => {
                 <UserCard
                   key={userId}
                   user={user}
+                  team_name={user.team_name}
+                  showTeam={canViewTeamFilter}
                   dailyData={(() => {
                     const mappedData = rows.map(r => {
                       // Format date as DD-MM-YYYY, never show time
@@ -860,7 +944,7 @@ const BillableReport = ({ userId }) => {
                   <Calendar className="w-4 h-4" />
                   Select Month
                 </label>
-                <div className="relative">
+                <div className="relative" ref={monthlyMonthPickerRef}>
                   <button
                     onClick={() => setShowMonthlyMonthPicker(!showMonthlyMonthPicker)}
                     className="w-48 px-4 py-2.5 bg-white border-2 border-blue-300 rounded-lg text-sm font-semibold text-slate-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all shadow-sm flex items-center justify-between"
@@ -872,7 +956,7 @@ const BillableReport = ({ userId }) => {
                     })() : 'All Months'}</span>
                     <Calendar className="w-4 h-4" />
                   </button>
-                  <CustomMonthPicker
+                  <MonthPickerComponent
                     value={monthlyMonth}
                     onChange={(val) => setMonthlyMonth(val)}
                     show={showMonthlyMonthPicker}
@@ -909,6 +993,7 @@ const BillableReport = ({ userId }) => {
                   onExport={(user) => handleExportMonthDailyData(user, parseMonthYear(month))}
                   onExportMonth={handleExportMonthTable}
                   hideTeamColumn={isAssistantManager}
+                  teamOptions={teams}
                 />
               ))}
             </div>
@@ -917,8 +1002,10 @@ const BillableReport = ({ userId }) => {
           )}
         </div>
       )}
+      </div>
     </div>
   );
+}
 
 // Helper to group data by month_year (robust, with fallback)
 function groupByMonthYear(data) {
@@ -943,7 +1030,6 @@ function parseMonthYear(monthYear) {
     return { label: match[1], year: match[2] };
   }
   return { label: monthYear, year: '' };
-}
 }
 
 export default BillableReport;

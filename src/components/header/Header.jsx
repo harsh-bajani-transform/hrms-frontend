@@ -252,35 +252,99 @@ const Header = ({
   // DEBUG: Log navItems and currentUser for troubleshooting tab visibility
   console.log('Header navItems:', navItems, 'currentUser:', currentUser);
 
+  // Helper function to check if a tab is active
+  const isTabActive = (view) => {
+    const currentPath = location.pathname;
+    const searchParams = new URLSearchParams(location.search);
+    const currentTab = searchParams.get('tab');
+    const roleId = Number(currentUser?.role_id);
+    const role = (currentUser?.role || currentUser?.role_name || currentUser?.user_role || '').toString().toUpperCase();
+
+    // Check for Analytics/Dashboard
+    if (view === ViewState.DASHBOARD || view === 'Analytics') {
+      return currentPath === '/dashboard' && (currentTab === 'overview' || !currentTab);
+    }
+
+    // Check for Tracker Report
+    if (view === 'TRACKER_REPORT') {
+      return currentPath === '/dashboard' && currentTab === 'tracker_report';
+    }
+
+    // Check for Agent List/Agent File Report
+    if (view === 'AGENT_LIST') {
+      return currentPath === '/dashboard' && currentTab === 'agent_file_report';
+    }
+
+    // Check for Manage/Admin Panel
+    if (view === ViewState.ADMIN_PANEL) {
+      return (currentPath === '/admin' || (currentPath === '/dashboard' && currentTab === 'manage'));
+    }
+
+    // Check for Entry/User Permission/Tracker
+    if (view === ViewState.ENTRY) {
+      // For agents, check if current path is /agent
+      if (roleId === 6 || role.includes('AGENT')) {
+        return currentPath === '/agent';
+      }
+      return currentPath === '/entry';
+    }
+
+    // Check for Agent Projects
+    if (view === 'AGENT_PROJECTS') {
+      return currentPath === '/agent-projects';
+    }
+
+    // Check for Billable Report
+    if (view === 'billable_report') {
+      return currentPath === '/dashboard' && currentTab === 'billable_report';
+    }
+
+    return false;
+  };
+
   // -----------------------------
   // NAV BUTTON UI (Desktop)
   // -----------------------------
-  const renderNavButton = (item) => (
-    <button
-      key={item.view}
-      onClick={() => !item.disabled && goTo(item.view)}
-      className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap text-slate-600 bg-slate-50 hover:bg-slate-200 ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      disabled={item.disabled}
-      title={item.disabled ? 'Projects tab is temporarily disabled' : item.label}
-    >
-      <item.icon className="w-4 h-4" />
-      <span className="hidden md:inline">{item.label}</span>
-    </button>
-  );
+  const renderNavButton = (item) => {
+    const isActive = isTabActive(item.view);
+    return (
+      <button
+        key={item.view}
+        onClick={() => !item.disabled && goTo(item.view)}
+        className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+          isActive 
+            ? 'bg-blue-600 text-white hover:bg-blue-700' 
+            : 'text-slate-600 bg-slate-50 hover:bg-slate-200'
+        } ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        disabled={item.disabled}
+        title={item.disabled ? 'Projects tab is temporarily disabled' : item.label}
+      >
+        <item.icon className="w-4 h-4" />
+        <span className="hidden md:inline">{item.label}</span>
+      </button>
+    );
+  };
 
   // -----------------------------
   // NAV BUTTON UI (Mobile)
   // -----------------------------
-  const renderMobileNavButton = (item) => (
-    <button
-      key={item.view}
-      onClick={() => goTo(item.view)}
-      className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors w-full text-slate-700 bg-slate-50 hover:bg-slate-200"
-    >
-      <item.icon className="w-5 h-5" />
-      <span>{item.label}</span>
-    </button>
-  );
+  const renderMobileNavButton = (item) => {
+    const isActive = isTabActive(item.view);
+    return (
+      <button
+        key={item.view}
+        onClick={() => goTo(item.view)}
+        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors w-full ${
+          isActive 
+            ? 'bg-blue-600 text-white hover:bg-blue-700' 
+            : 'text-slate-700 bg-slate-50 hover:bg-slate-200'
+        }`}
+      >
+        <item.icon className="w-5 h-5" />
+        <span>{item.label}</span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -297,12 +361,18 @@ const Header = ({
           <div className="flex items-center justify-between h-16">
             {/* LEFT: LOGO */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              <img src={logo} alt="TFS Ops Tracker Logo" className="h-10 w-auto" />
+              <img 
+                src={logo} 
+                alt="TFS Ops Tracker Logo" 
+                className="h-10 w-auto cursor-pointer hover:opacity-80 transition-opacity" 
+                onClick={() => goTo('Analytics')}
+                title="Go to Analytics"
+              />
             </div>
 
             {/* RIGHT: NAVIGATION + USER INFO + LOGOUT */}
             <div className="flex items-center gap-6">
-              <div className="hidden lg:flex items-center space-x-2">
+              <div className="hidden lg:flex items-center space-x-3">
                 {navItems.map(renderNavButton)}
               </div>
               

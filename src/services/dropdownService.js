@@ -39,6 +39,7 @@ export const fetchUserDropdowns = async () => {
                assistantManagers,
                qas,
                agents,
+               projectCategories,
           ] = await Promise.all([
                fetchDropdown("user roles"),
                fetchDropdown("designations"),
@@ -47,6 +48,7 @@ export const fetchUserDropdowns = async () => {
                fetchDropdown("assistant manager"),
                fetchDropdown("qa"),
                fetchDropdown("agent"),
+               fetchDropdown("project categories"),
           ]);
 
           const result = {
@@ -57,6 +59,7 @@ export const fetchUserDropdowns = async () => {
                assistantManagers,
                qas,
                agents,
+               projectCategories,
           };
 
           return result;
@@ -70,6 +73,7 @@ export const fetchUserDropdowns = async () => {
                assistantManagers: [],
                qas: [],
                agents: [],
+               projectCategories: [],
           };
      }
 };

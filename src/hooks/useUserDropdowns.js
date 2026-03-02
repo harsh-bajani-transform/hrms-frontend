@@ -10,6 +10,7 @@ export const useUserDropdowns = () => {
           assistantManagers: [],
           qas: [],
           agents: [],
+          projectCategories: [],
      });
 
      const [loading, setLoading] = useState(false);
@@ -27,6 +28,7 @@ export const useUserDropdowns = () => {
                console.log('[useUserDropdowns] assistantManagers:', data.assistantManagers);
                console.log('[useUserDropdowns] qas:', data.qas);
                console.log('[useUserDropdowns] agents:', data.agents);
+               console.log('[useUserDropdowns] projectCategories:', data.projectCategories);
 
                // ✅ VALIDATION GUARD
                const isValid =
@@ -36,7 +38,8 @@ export const useUserDropdowns = () => {
                     Array.isArray(data.projectManagers) &&
                     Array.isArray(data.assistantManagers) &&
                     Array.isArray(data.qas) &&
-                    Array.isArray(data.agents);
+                    Array.isArray(data.agents) &&
+                    Array.isArray(data.projectCategories);
 
                if (!isValid) {
                     console.warn("⚠️ Invalid dropdown response:", data);

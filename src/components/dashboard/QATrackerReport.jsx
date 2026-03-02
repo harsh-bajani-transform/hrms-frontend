@@ -5,13 +5,17 @@
  */
 import React, { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Download, Filter, FileDown, Users as UsersIcon, Calendar, RotateCcw, RefreshCw, Edit, Trash2, X } from "lucide-react";
+import { Download, Filter, FileDown, Users as UsersIcon, Calendar, RotateCcw, RefreshCw, Edit, Trash2, X, ChevronDown, Briefcase, ListTodo, Info, Plus, ListChecks } from "lucide-react";
 import { toast } from "react-hot-toast";
 import * as XLSX from 'xlsx';
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { log, logError } from "../../config/environment";
 import { useDeviceInfo } from "../../hooks/useDeviceInfo";
+import { DateRangePicker } from "../common/CustomCalendar";
+import MultiSelectWithCheckbox from "../common/MultiSelectWithCheckbox";
+import SearchableSelect from "../common/SearchableSelect";
+import { Clock } from "lucide-react";
 
 // Helper to get today's date in YYYY-MM-DD format
 const getTodayDate = () => {
@@ -39,16 +43,11 @@ const QATrackerReport = () => {
 
   // Filter states - Multi-select for agents
   const [selectedAgents, setSelectedAgents] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(''); // Single select for project
+  const [selectedTask, setSelectedTask] = useState(''); // Single select for task
   const [startDate, setStartDate] = useState(getTodayDate()); // Default to today
   const [endDate, setEndDate] = useState(getTodayDate()); // Default to today
   const [summary, setSummary] = useState([]);
-
-  // Custom calendar picker states
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-
-  // Custom dropdown states
-  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   
   // Edit modal dropdown states
   const [showEditProjectDropdown, setShowEditProjectDropdown] = useState(false);
@@ -63,10 +62,13 @@ const QATrackerReport = () => {
   const [editProjects, setEditProjects] = useState([]);
   const [editTasks, setEditTasks] = useState([]);
   const [editFormData, setEditFormData] = useState({
+    tracker_datetime: "",
     project_id: "",
     task_id: "",
+    shift_type: "",
     production: "",
     base_target: "",
+    tracker_note: "",
     tracker_file: null,
   });
   const [editFilePreview, setEditFilePreview] = useState(null);
@@ -74,32 +76,130 @@ const QATrackerReport = () => {
   const [editFileError, setEditFileError] = useState("");
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [editProductionError, setEditProductionError] = useState("");
 
   // Delete modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingTracker, setDeletingTracker] = useState(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
 
-  // Extract unique agents from trackers for frontend filtering
-  const uniqueAgents = useMemo(() => {
-    const agentsMap = new Map();
-    allTrackers.forEach(tracker => {
-      if (tracker.user_id && tracker.user_name) {
-        agentsMap.set(tracker.user_id, {
-          user_id: tracker.user_id,
-          user_name: tracker.user_name
-        });
-      }
-    });
-    return Array.from(agentsMap.values()).sort((a, b) => 
-      a.user_name.localeCompare(b.user_name)
-    );
-  }, [allTrackers]);
+  // Add tracker modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addProjects, setAddProjects] = useState([]);
+  const [addTasks, setAddTasks] = useState([]);
+  const [addFormData, setAddFormData] = useState({
+    agent_id: "",
+    tracker_datetime: "",
+    project_id: "",
+    task_id: "",
+    shift_type: "day",
+    production: "",
+    base_target: "",
+    tracker_note: "",
+    tracker_file: null,
+  });
+  const [addFileError, setAddFileError] = useState("");
+  const [loadingAddData, setLoadingAddData] = useState(false);
+  const [submittingAdd, setSubmittingAdd] = useState(false);
+  const [addProductionError, setAddProductionError] = useState("");
+  const [addTouched, setAddTouched] = useState({});
+  const [addErrors, setAddErrors] = useState({});
+
+  // Users list for agent dropdown filter
+  const [usersList, setUsersList] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Projects and Tasks lists for filter dropdowns
+  const [projectsList, setProjectsList] = useState([]);
+  const [tasksList, setTasksList] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+
+  // Fetch projects and tasks from API for filter dropdowns
+  const fetchProjectsAndTasks = async () => {
+    try {
+      setLoadingProjects(true);
+      setLoadingTasks(true);
+      log('[QATrackerReport] Fetching projects and tasks for filters');
+      
+      const payload = {
+        logged_in_user_id: Number(user?.user_id),
+        dropdown_type: "projects with tasks"
+      };
+      
+      const res = await api.post("/dropdown/get", payload);
+      const projectsData = res.data?.data || [];
+      
+      // Extract projects for project dropdown
+      const projects = projectsData.map(project => ({
+        project_id: project.project_id,
+        project_name: project.project_name
+      }));
+      
+      // Extract all tasks from all projects for task dropdown
+      const allTasks = [];
+      projectsData.forEach(project => {
+        if (project.tasks && Array.isArray(project.tasks)) {
+          project.tasks.forEach(task => {
+            allTasks.push({
+              task_id: task.task_id,
+              task_name: task.label,
+              task_target: task.task_target,
+              project_id: project.project_id
+            });
+          });
+        }
+      });
+      
+      setProjectsList(projects);
+      setTasksList(allTasks);
+      
+      log('[QATrackerReport] Projects and tasks fetched successfully:', {
+        projects: projects.length,
+        tasks: allTasks.length
+      });
+    } catch (error) {
+      logError('[QATrackerReport] Error fetching projects and tasks:', error);
+      setProjectsList([]);
+      setTasksList([]);
+      toast.error("Failed to load projects and tasks for filters");
+    } finally {
+      setLoadingProjects(false);
+      setLoadingTasks(false);
+    }
+  };
+
+  // Fetch users from user/list API for agent dropdown
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      log('[QATrackerReport] Fetching users list for agent filter');
+      const payload = {
+        user_id: String(user?.user_id),
+        device_id: device_id,
+        device_type: device_type
+      };
+      const res = await api.post("/user/list", payload);
+      const users = res.data?.data || [];
+      // Sort users alphabetically by name
+      const sortedUsers = users
+        .filter(u => u.user_name && u.user_id) // Filter out invalid entries
+        .sort((a, b) => a.user_name.localeCompare(b.user_name));
+      setUsersList(sortedUsers);
+      log('[QATrackerReport] Users fetched successfully:', sortedUsers.length);
+    } catch (error) {
+      logError('[QATrackerReport] Error fetching users:', error);
+      setUsersList([]);
+      toast.error("Failed to load users for filter");
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   // Fetch projects with tasks for edit modal
   const fetchProjectsWithTasks = async () => {
     try {
-      log('[QATrackerReport] Fetching projects with tasks for edit modal');
+      log('[QATrackerReport] Fetching projects with tasks for modals');
       const payload = {
         dropdown_type: "projects with tasks",
         logged_in_user_id: user?.user_id
@@ -107,11 +207,15 @@ const QATrackerReport = () => {
       const res = await api.post("/dropdown/get", payload);
       const projectsWithTasks = res.data?.data || [];
       setEditProjects(projectsWithTasks);
+      setAddProjects(projectsWithTasks); // Also set for add modal
       log('[QATrackerReport] Projects with tasks fetched:', projectsWithTasks.length);
+      return projectsWithTasks; // Return the data for immediate use
     } catch (error) {
       logError('[QATrackerReport] Error fetching projects with tasks:', error);
       setEditProjects([]);
+      setAddProjects([]);
       toast.error("Failed to load projects");
+      return []; // Return empty array on error
     }
   };
 
@@ -147,26 +251,65 @@ const QATrackerReport = () => {
     }
   };
 
+  // Fetch users, projects, and tasks list on component mount
+  useEffect(() => {
+    if (user?.user_id && device_id && device_type) {
+      fetchUsers();
+      fetchProjectsAndTasks();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.user_id, device_id, device_type]);
+
   // Fetch tracker data when date filters change
   useEffect(() => {
     if (user?.user_id) {
       fetchData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.user_id, startDate, endDate]);
 
-  // Filter trackers based on selected agents (frontend filtering)
+  // Clear selected task when project changes
   useEffect(() => {
-    if (selectedAgents.length === 0) {
-      // No agents selected, show all trackers
-      setTrackers(allTrackers);
-    } else {
-      // Filter by selected agents
-      const filtered = allTrackers.filter(tracker => 
+    if (selectedProject) {
+      setSelectedTask(''); // Clear task selection when project changes
+    }
+  }, [selectedProject]);
+
+  // Filter tasks based on selected project for cascading dropdown
+  const filteredTasksList = useMemo(() => {
+    if (!selectedProject) {
+      return tasksList; // Show all tasks if no project selected
+    }
+    return tasksList.filter(task => String(task.project_id) === String(selectedProject));
+  }, [tasksList, selectedProject]);
+
+  // Filter trackers based on selected agents, project, and task (frontend filtering)
+  useEffect(() => {
+    let filtered = allTrackers;
+
+    // Filter by selected agents
+    if (selectedAgents.length > 0) {
+      filtered = filtered.filter(tracker => 
         selectedAgents.includes(String(tracker.user_id))
       );
-      setTrackers(filtered);
     }
-  }, [selectedAgents, allTrackers]);
+
+    // Filter by selected project
+    if (selectedProject) {
+      filtered = filtered.filter(tracker => 
+        String(tracker.project_id) === String(selectedProject)
+      );
+    }
+
+    // Filter by selected task
+    if (selectedTask) {
+      filtered = filtered.filter(tracker => 
+        String(tracker.task_id) === String(selectedTask)
+      );
+    }
+
+    setTrackers(filtered);
+  }, [selectedAgents, selectedProject, selectedTask, allTrackers]);
 
   // Remove in-memory filtering; handled by API
 
@@ -215,202 +358,6 @@ const QATrackerReport = () => {
   // Convert dd/mm/yyyy to yyyy-mm-dd for storage
   const formatToStorage = (day, month, year) => {
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
-  // Handle date selection from custom calendar
-  const handleDateSelect = (name, dateValue) => {
-    if (name === 'start') {
-      setStartDate(dateValue);
-      setShowStartPicker(false);
-    } else if (name === 'end') {
-      setEndDate(dateValue);
-      setShowEndPicker(false);
-    }
-  };
-
-  // Generate calendar days
-  const generateCalendar = (currentDate) => {
-    const date = currentDate ? new Date(currentDate) : new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    return { year, month, daysInMonth, startingDayOfWeek };
-  };
-
-  const CustomDatePicker = ({ name, value, onSelect, show, onClose }) => {
-    const [viewDate, setViewDate] = useState(value || new Date().toISOString().split('T')[0]);
-    const { year, month, daysInMonth, startingDayOfWeek } = generateCalendar(viewDate);
-    
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-    const handlePrevMonth = () => {
-      const newDate = new Date(year, month - 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    const handleNextMonth = () => {
-      const newDate = new Date(year, month + 1, 1);
-      setViewDate(newDate.toISOString().split('T')[0]);
-    };
-
-    if (!show) return null;
-
-    return (
-      <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border-2 border-blue-200 p-3 w-64">
-        {/* Month/Year Header */}
-        <div className="flex items-center justify-between mb-3">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="font-bold text-sm text-slate-800">{monthNames[month]} {year}</span>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
-
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map(day => (
-            <div key={day} className="text-center text-xs font-bold text-slate-600">{day}</div>
-          ))}
-        </div>
-
-        {/* Calendar Days */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = formatToStorage(day, month + 1, year);
-            const isSelected = dateStr === value;
-            return (
-              <button
-                key={day}
-                onClick={() => onSelect(name, dateStr)}
-                className={`text-xs p-1.5 rounded hover:bg-blue-100 transition-colors ${
-                  isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'
-                }`}
-              >
-                {day}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Close Button */}
-        <button 
-          onClick={onClose}
-          className="w-full mt-3 text-xs text-slate-600 hover:text-slate-800 font-semibold"
-        >
-          Close
-        </button>
-      </div>
-    );
-  };
-
-  // Multi-Select Dropdown Component for Agents with Checkboxes
-  const MultiSelectAgentDropdown = ({ options, selectedValues, onChange, show, onClose }) => {
-    if (!show) return null;
-
-    const allSelected = options.length > 0 && selectedValues.length === options.length;
-
-    const handleToggleAgent = (agentId) => {
-      const agentIdStr = String(agentId);
-      if (selectedValues.includes(agentIdStr)) {
-        onChange(selectedValues.filter(id => id !== agentIdStr));
-      } else {
-        onChange([...selectedValues, agentIdStr]);
-      }
-    };
-
-    const handleSelectAll = () => {
-      if (allSelected) {
-        onChange([]);
-      } else {
-        onChange(options.map(opt => String(opt.user_id)));
-      }
-    };
-
-    return (
-      <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-xl border-2 border-blue-200 max-h-80 overflow-y-auto">
-        {/* Agent Options */}
-        {options.map((agent) => {
-          const agentId = String(agent.user_id);
-          const isSelected = selectedValues.includes(agentId);
-          
-          return (
-            <div
-              key={agent.user_id}
-              onClick={() => handleToggleAgent(agent.user_id)}
-              className={`px-4 py-2.5 cursor-pointer transition-all hover:bg-blue-50 ${
-                isSelected ? 'bg-blue-50/50' : ''
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {/* Custom Checkbox */}
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                  isSelected 
-                    ? 'bg-blue-600 border-blue-600' 
-                    : 'border-slate-300 bg-white'
-                }`}>
-                  {isSelected && (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                      <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                  )}
-                </div>
-                <span className={`text-sm ${
-                  isSelected ? 'text-blue-700 font-semibold' : 'text-slate-700'
-                }`}>{agent.user_name}</span>
-              </div>
-            </div>
-          );
-        })}
-        
-        {/* Select All Option at the bottom */}
-        {options.length > 0 && (
-          <div
-            onClick={handleSelectAll}
-            className="px-4 py-2.5 cursor-pointer transition-all hover:bg-blue-50 border-t-2 border-slate-200 bg-slate-50 sticky bottom-0"
-          >
-            <div className="flex items-center gap-3">
-              {/* Custom Checkbox for Select All */}
-              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                allSelected 
-                  ? 'bg-blue-600 border-blue-600' 
-                  : 'border-slate-300 bg-white'
-              }`}>
-                {allSelected && (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                )}
-              </div>
-              <span className={`text-sm font-bold ${
-                allSelected ? 'text-blue-700' : 'text-slate-700'
-              }`}>Select All</span>
-            </div>
-          </div>
-        )}
-        
-        {/* Close Button */}
-        <div className="p-2 border-t border-slate-200 bg-white sticky bottom-0">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
-          >
-            Apply Filter ({selectedValues.length} selected)
-          </button>
-        </div>
-      </div>
-    );
   };
 
   // Custom Dropdown Component for Edit Modal (single select)
@@ -480,8 +427,279 @@ const QATrackerReport = () => {
   const handleClearFilters = () => {
     const today = getTodayDate();
     setSelectedAgents([]);
+    setSelectedProject('');
+    setSelectedTask('');
     setStartDate(today);
     setEndDate(today);
+  };
+
+  // Handle open add tracker modal
+  const handleOpenAddModal = async () => {
+    log('[QATrackerReport] Opening add tracker modal');
+    setShowAddModal(true);
+    setLoadingAddData(true);
+    
+    try {
+      // Fetch projects with tasks from dropdown/get API (same as AgentDashboard)
+      if (addProjects.length === 0) {
+        await fetchProjectsWithTasks();
+      }
+      
+      // Reset form with all fields including agent_id and tracker_datetime
+      setAddFormData({
+        agent_id: "",
+        tracker_datetime: "",
+        project_id: "",
+        task_id: "",
+        shift_type: "day",
+        production: "",
+        base_target: "",
+        tracker_note: "",
+        tracker_file: null,
+      });
+      setAddFileError("");
+      setAddTouched({});
+      setAddErrors({});
+      setAddProductionError("");
+      
+    } catch (error) {
+      logError('[QATrackerReport] Error loading add modal data:', error);
+      toast.error("Failed to load form data");
+    } finally {
+      setLoadingAddData(false);
+    }
+  };
+
+  // Fetch projects with tasks for add modal
+  const fetchProjectsForAdd = async () => {
+    try {
+      const res = await api.post("/dropdown/projectwithtask", {
+        logged_in_user_id: user?.user_id,
+        device_id: device_id,
+        device_type: device_type
+      });
+      const projects = res.data?.data || [];
+      setAddProjects(projects);
+      log('[QATrackerReport] Projects with tasks loaded for add modal:', projects.length);
+    } catch (error) {
+      logError('[QATrackerReport] Error fetching projects for add:', error);
+    }
+  };
+
+  // Handle add form field changes
+  const handleAddFieldChange = (field, value) => {
+    setAddFormData(prev => ({ ...prev, [field]: value }));
+    setAddTouched(prev => ({ ...prev, [field]: true }));
+    
+    // Clear production error when user types
+    if (field === 'production') {
+      setAddProductionError("");
+    }
+    
+    // When agent changes, recalculate base target if task is selected
+    if (field === 'agent_id' && value) {
+      const selectedAgent = usersList.find(u => String(u.user_id) === String(value));
+      if (selectedAgent && addFormData.task_id) {
+        const project = addProjects.find(p => String(p.project_id) === String(addFormData.project_id));
+        const task = project?.tasks?.find(t => String(t.task_id) === String(addFormData.task_id));
+        if (task && selectedAgent.user_tenure) {
+          const calculated = Number(task.task_target) * Number(selectedAgent.user_tenure);
+          setAddFormData(prev => ({ ...prev, base_target: calculated.toFixed(2) }));
+        }
+      }
+    }
+    
+    // Update tasks when project changes
+    if (field === 'project_id') {
+      const project = addProjects.find(p => String(p.project_id) === String(value));
+      setAddTasks(project?.tasks || []);
+      setAddFormData(prev => ({ ...prev, task_id: "", base_target: "" }));
+    }
+    
+    // Calculate base target when task changes
+    if (field === 'task_id' && value) {
+      const project = addProjects.find(p => String(p.project_id) === String(addFormData.project_id));
+      const task = project?.tasks?.find(t => String(t.task_id) === String(value));
+      const selectedAgent = usersList.find(u => String(u.user_id) === String(addFormData.agent_id));
+      if (task && selectedAgent?.user_tenure) {
+        const calculated = Number(task.task_target) * Number(selectedAgent.user_tenure);
+        setAddFormData(prev => ({ ...prev, base_target: calculated.toFixed(2) }));
+      }
+    }
+    
+    // Validate field
+    validateAddField(field, value);
+  };
+
+  // Validate add form field
+  const validateAddField = (field, value) => {
+    const newErrors = { ...addErrors };
+    
+    switch (field) {
+      case 'agent_id':
+        if (!value) newErrors.agent_id = 'Agent is required';
+        else delete newErrors.agent_id;
+        break;
+      case 'tracker_datetime':
+        if (!value) newErrors.tracker_datetime = 'Date & Time is required';
+        else {
+          const selectedDate = new Date(value);
+          const now = new Date();
+          if (selectedDate > now) {
+            newErrors.tracker_datetime = 'Future date & time not allowed';
+          } else {
+            delete newErrors.tracker_datetime;
+          }
+        }
+        break;
+      case 'project_id':
+        if (!value) newErrors.project_id = 'Project is required';
+        else delete newErrors.project_id;
+        break;
+      case 'task_id':
+        if (!value) newErrors.task_id = 'Task is required';
+        else delete newErrors.task_id;
+        break;
+      case 'shift_type':
+        if (!value) newErrors.shift_type = 'Shift is required';
+        else delete newErrors.shift_type;
+        break;
+      case 'production':
+        if (!value) newErrors.production = 'Production is required';
+        else if (isNaN(value) || Number(value) <= 0) newErrors.production = 'Enter valid production';
+        else delete newErrors.production;
+        break;
+      default:
+        break;
+    }
+    
+    setAddErrors(newErrors);
+  };
+
+  // Handle add file upload
+  const handleAddFileChange = async (e) => {
+    const selectedFile = e.target.files[0];
+    setAddFileError("");
+    
+    if (!selectedFile) {
+      setAddFormData(prev => ({ ...prev, tracker_file: null }));
+      return;
+    }
+    
+    // Validate file size (10MB max)
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setAddFileError("File size must be less than 10MB");
+      e.target.value = "";
+      return;
+    }
+    
+    setAddFormData(prev => ({ ...prev, tracker_file: selectedFile }));
+  };
+
+  // Handle add form submit
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Mark all fields as touched
+    setAddTouched({
+      agent_id: true,
+      tracker_datetime: true,
+      project_id: true,
+      task_id: true,
+      shift_type: true,
+      production: true
+    });
+    
+    // Validate all fields
+    const errors = {};
+    if (!addFormData.agent_id) errors.agent_id = 'Agent is required';
+    if (!addFormData.tracker_datetime) {
+      errors.tracker_datetime = 'Date & Time is required';
+    } else {
+      const selectedDate = new Date(addFormData.tracker_datetime);
+      const now = new Date();
+      if (selectedDate > now) {
+        errors.tracker_datetime = 'Future date & time not allowed';
+      }
+    }
+    if (!addFormData.project_id) errors.project_id = 'Project is required';
+    if (!addFormData.task_id) errors.task_id = 'Task is required';
+    if (!addFormData.shift_type) errors.shift_type = 'Shift is required';
+    if (!addFormData.production) errors.production = 'Production is required';
+    else if (isNaN(addFormData.production) || Number(addFormData.production) <= 0) {
+      errors.production = 'Enter valid production';
+    }
+    
+    setAddErrors(errors);
+    
+    if (Object.keys(errors).length > 0 || addFileError) {
+      toast.error("Please fix all errors before submitting");
+      return;
+    }
+    
+    setSubmittingAdd(true);
+    
+    try {
+      // Convert datetime-local format (yyyy-MM-ddTHH:mm) to yyyy-MM-dd HH:MM:SS
+      const dateTimeValue = addFormData.tracker_datetime;
+      const formattedDateTime = dateTimeValue.replace('T', ' ') + ':00'; // Add seconds
+      
+      // Prepare FormData payload
+      const formData = new FormData();
+      formData.append('user_id', Number(addFormData.agent_id));
+      formData.append('date', formattedDateTime);
+      formData.append('project_id', Number(addFormData.project_id));
+      formData.append('task_id', Number(addFormData.task_id));
+      formData.append('shift', addFormData.shift_type);
+      formData.append('production', Number(addFormData.production));
+      formData.append('tenure_target', Number(addFormData.base_target));
+      
+      if (addFormData.tracker_note && addFormData.tracker_note.trim()) {
+        formData.append('tracker_note', addFormData.tracker_note.trim());
+      }
+      
+      if (addFormData.tracker_file) {
+        formData.append('tracker_file', addFormData.tracker_file);
+      }
+      
+      log('[QATrackerReport] Submitting add tracker with date:', formattedDateTime);
+      const res = await api.post("/tracker/add", formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (res.data?.status === 201 || res.status === 201 || res.status === 200) {
+        toast.success("Tracker added successfully!");
+        handleCloseAddModal(); // Reset form and close modal
+        fetchData(); // Refresh tracker list
+      } else {
+        throw new Error('Failed to add tracker');
+      }
+    } catch (error) {
+      logError('[QATrackerReport] Error adding tracker:', error);
+      toast.error(error.response?.data?.message || "Failed to add tracker");
+    } finally {
+      setSubmittingAdd(false);
+    }
+  };
+
+  // Close add modal
+  const handleCloseAddModal = () => {
+    setShowAddModal(false);
+    setAddFormData({
+      agent_id: "",
+      tracker_datetime: "",
+      project_id: "",
+      task_id: "",
+      shift_type: "",
+      production: "",
+      base_target: "",
+      tracker_note: "",
+      tracker_file: null,
+    });
+    setAddFileError("");
+    setAddTouched({});
+    setAddErrors({});
+    setAddProductionError("");
   };
 
   // Handle edit tracker
@@ -492,48 +710,75 @@ const QATrackerReport = () => {
     setEditingTracker(tracker);
     setShowEditModal(true);
     setLoadingEditData(true);
+    setEditProductionError("");
 
     try {
       // Fetch projects with tasks if not already fetched
+      let projectsData = editProjects;
       if (editProjects.length === 0) {
-        await fetchProjectsWithTasks();
+        projectsData = await fetchProjectsWithTasks();
       }
 
-      // Fetch existing tracker data from tracker/view API
-      const payload = {
-        logged_in_user_id: user?.user_id,
-        device_id: device_id,
-        device_type: device_type,
-        tracker_id: tracker.tracker_id
-      };
-
-      const res = await api.post("/tracker/view", payload);
-      const data = res.data?.data || {};
-      const trackerData = Array.isArray(data.trackers) && data.trackers.length > 0 
-        ? data.trackers[0] 
-        : tracker;
-
-      // Set form data with existing values
+      // Use the tracker data passed from the table (already has all the info we need)
+      // Normalize shift value to match dropdown options ('day' or 'night')
+      const rawShift = tracker.shift_type || tracker.shift || "";
+      log('[QATrackerReport] Raw shift value:', rawShift);
+      
+      const normalizedShift = String(rawShift).toLowerCase().includes('day') ? 'day' 
+                            : String(rawShift).toLowerCase().includes('night') ? 'night' 
+                            : String(rawShift).toLowerCase();
+      
+      log('[QATrackerReport] Normalized shift value:', normalizedShift);
+      
+      // Format tracker date_time to YYYY-MM-DDTHH:mm format for datetime-local input
+      // Use UTC methods to match the table display
+      let formattedDateTime = '';
+      if (tracker.date_time) {
+        try {
+          const dateObj = new Date(tracker.date_time);
+          // Format to YYYY-MM-DDTHH:mm using UTC methods (to match table display)
+          const year = dateObj.getUTCFullYear();
+          const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getUTCDate()).padStart(2, '0');
+          const hours = String(dateObj.getUTCHours()).padStart(2, '0');
+          const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
+          formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+          log('[QATrackerReport] Formatted date_time (UTC):', formattedDateTime, 'from:', tracker.date_time);
+        } catch (err) {
+          logError('[QATrackerReport] Error formatting date_time:', err);
+        }
+      }
+      
+      // Set form data with existing values from tracker
       setEditFormData({
-        project_id: trackerData.project_id || "",
-        task_id: trackerData.task_id || "",
-        production: trackerData.production || "",
-        base_target: trackerData.tenure_target || trackerData.actual_target || "",
+        tracker_datetime: formattedDateTime,
+        project_id: tracker.project_id || "",
+        task_id: tracker.task_id || "",
+        shift_type: normalizedShift,
+        production: tracker.production || "",
+        base_target: tracker.tenure_target || tracker.actual_target || "",
+        tracker_note: tracker.tracker_note || tracker.notes || "",
         tracker_file: null,
       });
 
       // Set file preview if tracker has file
-      if (trackerData.tracker_file) {
-        setEditFilePreview(trackerData.tracker_file);
+      if (tracker.tracker_file) {
+        setEditFilePreview(tracker.tracker_file);
       }
 
-      // Update tasks based on selected project
-      if (trackerData.project_id && editProjects.length > 0) {
-        const project = editProjects.find(p => String(p.project_id) === String(trackerData.project_id));
+      // Update tasks based on selected project using the fetched projects data
+      if (tracker.project_id && projectsData.length > 0) {
+        const project = projectsData.find(p => String(p.project_id) === String(tracker.project_id));
+        log('[QATrackerReport] Found project for tasks:', project?.project_name, 'Tasks count:', project?.tasks?.length);
         setEditTasks(project?.tasks || []);
       }
 
-      log('[QATrackerReport] Edit form data loaded:', editFormData);
+      log('[QATrackerReport] Edit form data set:', {
+        project_id: tracker.project_id,
+        task_id: tracker.task_id,
+        shift_type: normalizedShift,
+        production: tracker.production
+      });
     } catch (error) {
       logError('[QATrackerReport] Error loading tracker data:', error);
       toast.error("Failed to load tracker data");
@@ -622,6 +867,22 @@ const QATrackerReport = () => {
 
       return updated;
     });
+    
+    // Validate production against base target
+    if (field === 'production') {
+      const productionValue = Number(value);
+      const baseTarget = Number(editFormData.base_target);
+      
+      if (isNaN(productionValue)) {
+        setEditProductionError('Please enter a valid number');
+      } else if (productionValue < 0) {
+        setEditProductionError('Production cannot be negative');
+      } else if (baseTarget && productionValue > (baseTarget * 2)) {
+        setEditProductionError(`Production cannot exceed ${(baseTarget * 2).toFixed(2)} (double of base target)`);
+      } else {
+        setEditProductionError('');
+      }
+    }
   };
 
   // Handle edit file upload
@@ -672,8 +933,14 @@ const QATrackerReport = () => {
     e.preventDefault();
 
     // Validate required fields
-    if (!editFormData.project_id || !editFormData.task_id || !editFormData.production) {
+    if (!editFormData.tracker_datetime || !editFormData.project_id || !editFormData.task_id || !editFormData.production) {
       toast.error("Please fill all required fields");
+      return;
+    }
+
+    // Check for production error
+    if (editProductionError) {
+      toast.error(editProductionError);
       return;
     }
 
@@ -688,11 +955,28 @@ const QATrackerReport = () => {
       // Create FormData for multipart/form-data upload
       const formData = new FormData();
       formData.append('tracker_id', editingTracker.tracker_id);
+      
+      // Format date_time to MySQL DATETIME format (YYYY-MM-DD HH:mm:ss)
+      // Input format is YYYY-MM-DDTHH:mm (from datetime-local input in UTC)
+      if (editFormData.tracker_datetime) {
+        // Simply replace 'T' with space and add seconds
+        // Input: "2026-02-25T13:34" -> Output: "2026-02-25 13:34:00"
+        const formattedDateTime = editFormData.tracker_datetime.replace('T', ' ') + ':00';
+        formData.append('date_time', formattedDateTime);
+        log('[QATrackerReport] Formatted date_time for submission:', formattedDateTime, 'from input:', editFormData.tracker_datetime);
+      }
+      
       formData.append('project_id', Number(editFormData.project_id));
       formData.append('task_id', Number(editFormData.task_id));
+      formData.append('shift', editFormData.shift_type);
       formData.append('user_id', editingTracker.user_id);
       formData.append('production', Number(editFormData.production));
       formData.append('base_target', Number(editFormData.base_target));
+
+      // Add tracker_note if provided
+      if (editFormData.tracker_note && editFormData.tracker_note.trim()) {
+        formData.append('tracker_note', editFormData.tracker_note.trim());
+      }
 
       // Add file only if new file was uploaded
       if (editFormData.newFile) {
@@ -712,10 +996,12 @@ const QATrackerReport = () => {
         setShowEditModal(false);
         setEditingTracker(null);
         setEditFormData({
+          tracker_datetime: "",
           project_id: "",
           task_id: "",
           production: "",
           base_target: "",
+          tracker_note: "",
           tracker_file: null,
           newFile: null
         });
@@ -740,15 +1026,19 @@ const QATrackerReport = () => {
     setShowEditModal(false);
     setEditingTracker(null);
     setEditFormData({
+      tracker_datetime: "",
       project_id: "",
       task_id: "",
+      shift_type: "",
       production: "",
       base_target: "",
+      tracker_note: "",
       tracker_file: null,
     });
     setEditFilePreview(null);
     setEditFileBase64(null);
     setEditFileError("");
+    setEditProductionError("");
   };
 
   // Calculate totals from filtered trackers
@@ -851,7 +1141,7 @@ const QATrackerReport = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 py-6 px-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-slate-200">
           <div className="flex items-center justify-between">
@@ -878,119 +1168,120 @@ const QATrackerReport = () => {
 
         {/* Filter Section */}
         <div className="bg-white rounded-2xl shadow-lg p-3 mb-6 border border-slate-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Start Date */}
+          {/* Filter Dropdowns */}
+          <div className="flex flex-wrap items-end gap-3 mb-3">
+            {/* Date Range Picker */}
             <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                Start Date
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formatToDisplay(startDate)}
-                  readOnly
-                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all cursor-pointer"
-                  placeholder="dd/mm/yyyy"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowStartPicker(!showStartPicker)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                </button>
-                <CustomDatePicker 
-                  name="start"
-                  value={startDate}
-                  onSelect={handleDateSelect}
-                  show={showStartPicker}
-                  onClose={() => setShowStartPicker(false)}
-                />
-              </div>
-            </div>
-
-            {/* End Date */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                End Date
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formatToDisplay(endDate)}
-                  readOnly
-                  className="w-full px-3 py-1.5 pr-10 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all cursor-pointer"
-                  placeholder="dd/mm/yyyy"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowEndPicker(!showEndPicker)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                </button>
-                <CustomDatePicker 
-                  name="end"
-                  value={endDate}
-                  onSelect={handleDateSelect}
-                  show={showEndPicker}
-                  onClose={() => setShowEndPicker(false)}
-                />
-              </div>
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                label=""
+                description={null}
+                showClearButton={false}
+                compact={true}
+                fieldWidth="220px"
+                noWrapper={true}
+              />
             </div>
 
             {/* Agent Multi-Select Dropdown */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+            <div style={{ width: '210px' }}>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                 <UsersIcon className="w-3.5 h-3.5 text-blue-600" />
-                Filter by Agents
+                Agents
               </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowAgentDropdown(!showAgentDropdown)}
-                  className="w-full px-3 py-1.5 pr-10 text-sm text-left border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 transition-all hover:bg-white"
-                >
-                  {selectedAgents.length === 0 ? (
-                    <span className="text-slate-500">All Agents ({uniqueAgents.length})</span>
-                  ) : selectedAgents.length === uniqueAgents.length ? (
-                    <span className="text-blue-700 font-semibold">All Agents Selected ({uniqueAgents.length})</span>
-                  ) : (
-                    <span className="text-blue-700 font-semibold">{selectedAgents.length} Agent{selectedAgents.length > 1 ? 's' : ''} Selected</span>
-                  )}
-                </button>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
-                <MultiSelectAgentDropdown
-                  options={uniqueAgents}
-                  selectedValues={selectedAgents}
-                  onChange={setSelectedAgents}
-                  show={showAgentDropdown}
-                  onClose={() => setShowAgentDropdown(false)}
-                />
-              </div>
+              
+              <MultiSelectWithCheckbox
+                icon={UsersIcon}
+                value={selectedAgents}
+                onChange={setSelectedAgents}
+                options={usersList.map(agent => ({ 
+                  value: String(agent.user_id), 
+                  label: agent.user_name 
+                }))}
+                placeholder="Select Agents"
+                showSelectAll={true}
+                maxDisplayCount={1}
+              />
             </div>
+
+            {/* Project Dropdown */}
+            <div style={{ width: '210px' }}>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+                Project
+              </label>
+              
+              <SearchableSelect
+                icon={Briefcase}
+                value={selectedProject}
+                onChange={setSelectedProject}
+                options={projectsList.map(project => ({ 
+                  value: String(project.project_id), 
+                  label: project.project_name 
+                }))}
+                placeholder="Select Project"
+                isClearable={true}
+                disabled={loadingProjects}
+              />
+            </div>
+
+            {/* Task Dropdown */}
+            <div style={{ width: '210px' }}>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                <ListTodo className="w-3.5 h-3.5 text-blue-600" />
+                Task
+              </label>
+              
+              <SearchableSelect
+                icon={ListTodo}
+                value={selectedTask}
+                onChange={setSelectedTask}
+                options={filteredTasksList.map(task => ({ 
+                  value: String(task.task_id), 
+                  label: task.task_name 
+                }))}
+                placeholder="Select Task"
+                isClearable={true}
+                disabled={loadingTasks}
+              />
+            </div>
+
+            {/* Add Tracker Button - Only visible to AM, PM, Admin, Super Admin (not QA) */}
+            {!isQAAgent && (
+              <div className="flex items-end">
+                <button
+                  onClick={handleOpenAddModal}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all duration-200"
+                  type="button"
+                  title="Add new tracker entry"
+                >
+                  <Plus className="w-4 h-4" />
+                  Tracker
+                </button>
+              </div>
+            )}
           </div>
-          
-          {/* Clear Filters and Refresh Buttons */}
-          <div className="mt-2 flex justify-end gap-3">
+
+          {/* Action Buttons - Right Aligned */}
+          <div className="flex justify-end gap-2">
+            {/* Reset Filters Button */}
             <button
               onClick={handleClearFilters}
-              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
               type="button"
             >
               <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
-              Reset Filters
+              Reset
             </button>
+            
+            {/* Refresh Button */}
             <button
               onClick={fetchData}
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-sm shadow-sm hover:shadow-md transition-all duration-200 group"
               type="button"
               title="Refresh data"
             >
@@ -1015,15 +1306,17 @@ const QATrackerReport = () => {
             <div className="max-h-[600px] overflow-y-auto">
               <table className="min-w-full text-sm text-slate-700 table-fixed">
                 <colgroup>
-                  <col style={{ width: isQAAgent ? '11%' : '10%' }}/>
-                  <col style={{ width: isQAAgent ? '13%' : '11%' }}/>
+                  <col style={{ width: isQAAgent ? '9%' : '7%' }}/>
+                  <col style={{ width: isQAAgent ? '10%' : '8%' }}/>
+                  <col style={{ width: isQAAgent ? '10%' : '8%' }}/>
+                  <col style={{ width: isQAAgent ? '10%' : '8%' }}/>
+                  <col style={{ width: isQAAgent ? '8%' : '7%' }}/>
+                  <col style={{ width: isQAAgent ? '9%' : '7%' }}/>
+                  <col style={{ width: isQAAgent ? '9%' : '7%' }}/>
+                  <col style={{ width: isQAAgent ? '9%' : '7%' }}/>
                   <col style={{ width: isQAAgent ? '16%' : '14%' }}/>
-                  <col style={{ width: isQAAgent ? '16%' : '14%' }}/>
-                  <col style={{ width: isQAAgent ? '12%' : '10%' }}/>
-                  <col style={{ width: isQAAgent ? '12%' : '10%' }}/>
-                  <col style={{ width: isQAAgent ? '13%' : '10%' }}/>
-                  <col style={{ width: isQAAgent ? '7%' : '6%' }}/>
-                  {!isQAAgent && <col style={{ width: '15%' }}/>}
+                  <col style={{ width: isQAAgent ? '10%' : '8%' }}/>
+                  {!isQAAgent && <col style={{ width: '12%' }}/>}
                 </colgroup>
                 <thead className="bg-gradient-to-r from-blue-600 to-blue-700 sticky top-0 z-10">
                   <tr>
@@ -1031,9 +1324,11 @@ const QATrackerReport = () => {
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Agent</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Project</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Task</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Shift</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Per Hour Target</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Production</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Billable Hours</th>
+                    <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-left">Notes</th>
                     <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-center">File</th>
                     {!isQAAgent && <th className="px-5 py-4 font-bold text-white text-xs uppercase tracking-wider text-center">Actions</th>}
                   </tr>
@@ -1041,7 +1336,7 @@ const QATrackerReport = () => {
                 <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={isQAAgent ? "8" : "9"} className="px-5 py-16 text-center">
+                <td colSpan={isQAAgent ? "10" : "11"} className="px-5 py-16 text-center">
                   <div className="flex flex-col items-center justify-center gap-4">
                     <RefreshCw className="w-10 h-10 text-blue-600 animate-spin" />
                     <p className="text-slate-600 font-medium text-base">Loading tracker data...</p>
@@ -1050,7 +1345,7 @@ const QATrackerReport = () => {
               </tr>
             ) : trackers.length === 0 ? (
               <tr>
-                <td colSpan={isQAAgent ? "8" : "9"} className="px-5 py-16 text-center">
+                <td colSpan={isQAAgent ? "10" : "11"} className="px-5 py-16 text-center">
                   <div className="flex flex-col items-center justify-center gap-4">
                     <svg className="w-16 h-16 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1081,6 +1376,17 @@ const QATrackerReport = () => {
                   <td className="px-5 py-3 align-middle whitespace-nowrap">
                     {tracker.task_name || "-"}
                   </td>
+                  <td className="px-5 py-3 align-middle whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      (tracker.shift || tracker.shift_type || '').toLowerCase() === 'day' || (tracker.shift || tracker.shift_type) === 'day_shift'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                        : (tracker.shift || tracker.shift_type || '').toLowerCase() === 'night' || (tracker.shift || tracker.shift_type) === 'night_shift'
+                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {(tracker.shift || tracker.shift_type || '').toLowerCase() === 'day' || (tracker.shift || tracker.shift_type) === 'day_shift' ? 'Day' : (tracker.shift || tracker.shift_type || '').toLowerCase() === 'night' || (tracker.shift || tracker.shift_type) === 'night_shift' ? 'Night' : '—'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 align-middle whitespace-nowrap text-slate-800">
                     {formatDecimal(tracker.tenure_target || dropdownTaskMap[tracker.task_id])}
                   </td>
@@ -1089,6 +1395,36 @@ const QATrackerReport = () => {
                   </td>
                   <td className="px-5 py-3 align-middle font-bold text-purple-700 whitespace-nowrap">
                     {formatDecimal(tracker.billable_hours)}
+                  </td>
+                  <td className="px-5 py-3 align-middle text-slate-600 text-sm">
+                    {tracker.tracker_note || tracker.notes ? (
+                      <div className="relative inline-flex items-center gap-1">
+                        <span>
+                          {(tracker.tracker_note || tracker.notes).length > 10
+                            ? `${(tracker.tracker_note || tracker.notes).substring(0, 10)}...`
+                            : tracker.tracker_note || tracker.notes}
+                        </span>
+                        {(tracker.tracker_note || tracker.notes).length > 10 && (
+                          <div className="relative group/notes">
+                            <Info className="w-4 h-4 text-blue-500 cursor-pointer hover:text-blue-700 transition-colors" />
+                            {/* Tooltip - Only shows on hover of icon */}
+                            <div className={`absolute right-0 ${index >= trackers.length - 3 ? 'bottom-full mb-2' : 'top-full mt-2'} hidden group-hover/notes:block z-50 pointer-events-none`}>
+                              <div className="bg-white text-slate-800 text-xs rounded-lg px-3 py-2 shadow-xl border border-slate-200 min-w-[400px] max-w-2xl max-h-32 break-words whitespace-normal">
+                                {tracker.tracker_note || tracker.notes}
+                                {/* Arrow */}
+                                {index >= trackers.length - 3 ? (
+                                  <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
+                                ) : (
+                                  <div className="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-white"></div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3 align-middle text-center">
                     {tracker.tracker_file ? (
@@ -1259,7 +1595,113 @@ const QATrackerReport = () => {
                 ) : (
                   <>
                     {/* Form Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
+                      {/* Date & Time Selection */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                          <Calendar className="w-4 h-4 text-blue-600" />
+                          Date & Time
+                          <span className="text-red-500">*</span>
+                        </label>
+                        
+                        {/* Date Picker */}
+                        <div className="relative cursor-pointer mb-2">
+                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-600 pointer-events-none" />
+                          <input
+                            type="date"
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-10 pr-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white cursor-pointer"
+                            value={editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : ''}
+                            onChange={(e) => {
+                              const date = e.target.value;
+                              const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                              setEditFormData(prev => ({ ...prev, tracker_datetime: date ? `${date}T${time}` : '' }));
+                            }}
+                            max={new Date().toISOString().split('T')[0]}
+                          />
+                        </div>
+                        
+                        {/* Time Picker - 12 Hour Format */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {/* Hour Dropdown */}
+                          <div className="relative">
+                            <select
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white"
+                              value={editFormData.tracker_datetime ? (() => {
+                                const time = editFormData.tracker_datetime.split('T')[1] || '00:00';
+                                let hour = parseInt(time.split(':')[0]);
+                                if (hour === 0) return 12;
+                                if (hour > 12) return hour - 12;
+                                return hour;
+                              })() : 12}
+                              onChange={(e) => {
+                                const date = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                                const currentHour = parseInt(time.split(':')[0]);
+                                const minute = time.split(':')[1];
+                                const isPM = currentHour >= 12;
+                                let newHour = parseInt(e.target.value);
+                                if (isPM && newHour !== 12) newHour += 12;
+                                else if (!isPM && newHour === 12) newHour = 0;
+                                setEditFormData(prev => ({ ...prev, tracker_datetime: `${date}T${String(newHour).padStart(2, '0')}:${minute}` }));
+                              }}
+                            >
+                              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(hour => (
+                                <option key={hour} value={hour}>{hour}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          {/* Minute Dropdown */}
+                          <div className="relative">
+                            <select
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white"
+                              value={editFormData.tracker_datetime ? (editFormData.tracker_datetime.split('T')[1] || '00:00').split(':')[1] : '00'}
+                              onChange={(e) => {
+                                const date = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                                const hour = time.split(':')[0];
+                                setEditFormData(prev => ({ ...prev, tracker_datetime: `${date}T${hour}:${e.target.value}` }));
+                              }}
+                            >
+                              {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(min => (
+                                <option key={min} value={min}>{min}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          {/* AM/PM Dropdown */}
+                          <div className="relative">
+                            <select
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all shadow-sm hover:bg-white"
+                              value={editFormData.tracker_datetime ? (() => {
+                                const time = editFormData.tracker_datetime.split('T')[1] || '00:00';
+                                const hour = parseInt(time.split(':')[0]);
+                                return hour >= 12 ? 'PM' : 'AM';
+                              })() : 'AM'}
+                              onChange={(e) => {
+                                const date = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                const time = editFormData.tracker_datetime ? editFormData.tracker_datetime.split('T')[1] : '00:00';
+                                let hour = parseInt(time.split(':')[0]);
+                                const minute = time.split(':')[1];
+                                const newIsPM = e.target.value === 'PM';
+                                const currentIsPM = hour >= 12;
+                                
+                                if (newIsPM && !currentIsPM) {
+                                  hour = hour === 12 ? 12 : hour + 12;
+                                } else if (!newIsPM && currentIsPM) {
+                                  hour = hour === 12 ? 0 : hour - 12;
+                                }
+                                
+                                setEditFormData(prev => ({ ...prev, tracker_datetime: `${date}T${String(hour).padStart(2, '0')}:${minute}` }));
+                              }}
+                            >
+                              <option value="AM">AM</option>
+                              <option value="PM">PM</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Project Selection */}
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
@@ -1348,6 +1790,29 @@ const QATrackerReport = () => {
                         </div>
                       </div>
 
+                      {/* Shift Selection */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                          </svg>
+                          Shift
+                          <span className="text-red-500">*</span>
+                        </label>
+                        <SearchableSelect
+                          value={editFormData.shift_type}
+                          onChange={(value) => handleEditFieldChange('shift_type', value)}
+                          options={[
+                            { value: 'day', label: 'Day' },
+                            { value: 'night', label: 'Night' }
+                          ]}
+                          icon={Clock}
+                          placeholder="Select shift..."
+                          disabled={false}
+                        />
+                      </div>
+
                       {/* Base Target */}
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
@@ -1361,11 +1826,11 @@ const QATrackerReport = () => {
                         </label>
                         <div className="relative">
                           <div className="w-full bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-300 rounded-lg px-4 py-3 text-sm font-bold text-slate-700 shadow-sm flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
                               <rect width="14" height="10" x="5" y="11" rx="2"></rect>
                               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
-                            <span>{editFormData.base_target || '—'}</span>
+                            <span>{editFormData.base_target ? Number(editFormData.base_target).toFixed(2) : '—'}</span>
                           </div>
                         </div>
                       </div>
@@ -1380,94 +1845,172 @@ const QATrackerReport = () => {
                           Production
                           <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="number"
-                          min="0"
-                          className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm hover:bg-white"
-                          value={editFormData.production}
-                          onChange={(e) => handleEditFieldChange('production', e.target.value)}
-                          placeholder="Enter production"
-                        />
-                      </div>
-                    </div>
-
-                    {/* File Upload Section */}
-                    <div className="mb-5">
-                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                          <polyline points="14 2 14 8 20 8"></polyline>
-                        </svg>
-                        Project Files
-                      </label>
-                      
-                      {/* Existing file preview */}
-                      {editFilePreview && !editFormData.tracker_file && (
-                        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                            </svg>
-                            <span className="text-sm font-medium text-blue-700">Existing file attached</span>
-                          </div>
-                          <a
-                            href={editFilePreview}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 text-sm font-semibold"
-                          >
-                            View
-                          </a>
-                        </div>
-                      )}
-
-                      <div
-                        onClick={() => document.getElementById('edit-file-upload').click()}
-                        className={`relative border-2 border-dashed rounded-lg px-6 py-6 text-center transition-all cursor-pointer group ${
-                          editFileError 
-                            ? 'border-red-300 bg-red-50/30 hover:border-red-400' 
-                            : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
-                        }`}
-                      >
-                        <div className="flex flex-col items-center gap-3">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors ${
-                            editFileError ? 'bg-red-100' : 'bg-blue-100'
-                          }`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={editFileError ? 'text-red-600' : 'text-blue-600'}>
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                              <polyline points="17 8 12 3 7 8"></polyline>
-                              <line x1="12" x2="12" y1="3" y2="15"></line>
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              {editFormData.tracker_file ? (
-                                <span className="text-blue-600">{editFormData.tracker_file.name}</span>
-                              ) : (
-                                <>Click to upload new file <span className="text-blue-600">or drag and drop</span></>
-                              )}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-1">Max file size: 10MB</p>
-                          </div>
-                        </div>
-                        <input
-                          id="edit-file-upload"
-                          type="file"
-                          accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
-                          onChange={handleEditFileChange}
-                          className="hidden"
-                        />
-                      </div>
-                      {editFileError && (
-                        <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" x2="12" y1="8" y2="12"></line>
-                            <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                        <div className="relative">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                            <line x1="12" x2="12" y1="2" y2="22"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                           </svg>
-                          {editFileError}
-                        </p>
-                      )}
+                          <input
+                            type="text"
+                            className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white ${
+                              editProductionError
+                                ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                                : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                            }`}
+                            value={editFormData.production}
+                            onChange={(e) => handleEditFieldChange('production', e.target.value)}
+                            onBlur={(e) => {
+                              // Format to 2 decimal places
+                              const value = e.target.value.trim();
+                              if (value && !isNaN(value)) {
+                                handleEditFieldChange('production', parseFloat(value).toFixed(2));
+                              }
+                            }}
+                            placeholder="Enter production"
+                          />
+                        </div>
+                        {editProductionError && (
+                          <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" x2="12" y1="8" y2="12"></line>
+                              <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                            </svg>
+                            {editProductionError}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* File Upload Section - Spans 2 rows */}
+                      <div className="space-y-2 md:row-span-2">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                          </svg>
+                          Project Files
+                        </label>
+                        
+                        {/* Existing file preview */}
+                        {editFilePreview && !editFormData.tracker_file && (
+                          <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                              </svg>
+                              <span className="text-xs font-medium text-blue-700">Existing file</span>
+                            </div>
+                            <a
+                              href={editFilePreview}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
+                            >
+                              View
+                            </a>
+                          </div>
+                        )}
+
+                        <div
+                          onClick={() => document.getElementById('edit-file-upload').click()}
+                          className={`relative h-[120px] flex items-center justify-center border-2 border-dashed rounded-lg px-4 py-4 text-center transition-all cursor-pointer group ${
+                            editFileError 
+                              ? 'border-red-300 bg-red-50/30 hover:border-red-400' 
+                              : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
+                          }`}
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors ${
+                              editFileError ? 'bg-red-100' : 'bg-blue-100'
+                            }`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={editFileError ? 'text-red-600' : 'text-blue-600'}>
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" x2="12" y1="3" y2="15"></line>
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-slate-700">
+                                {editFormData.tracker_file ? (
+                                  <span className="text-blue-600 break-all">{editFormData.tracker_file.name}</span>
+                                ) : (
+                                  <>Click to <span className="text-blue-600">upload</span></>
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">Max: 10MB</p>
+                            </div>
+                          </div>
+                          <input
+                            id="edit-file-upload"
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                            onChange={handleEditFileChange}
+                            className="hidden"
+                          />
+                        </div>
+                        {editFileError && (
+                          <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" x2="12" y1="8" y2="12"></line>
+                              <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                            </svg>
+                            {editFileError}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Notes Field - Spans 2 columns */}
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="flex items-center justify-between text-sm font-bold text-slate-700 uppercase tracking-wide">
+                          <span className="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" x2="8" y1="13" y2="13"></line>
+                              <line x1="16" x2="8" y1="17" y2="17"></line>
+                              <line x1="10" x2="8" y1="9" y2="9"></line>
+                            </svg>
+                            Notes
+                          </span>
+                          <span className={`text-xs font-medium ${
+                            (editFormData.tracker_note?.length || 0) > 200 ? 'text-red-600' : 'text-slate-500'
+                          }`}>
+                            {editFormData.tracker_note?.length || 0}/200
+                          </span>
+                        </label>
+                        <div className="relative">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-3 text-blue-600 pointer-events-none">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" x2="8" y1="13" y2="13"></line>
+                            <line x1="16" x2="8" y1="17" y2="17"></line>
+                            <line x1="10" x2="8" y1="9" y2="9"></line>
+                          </svg>
+                          <textarea
+                            rows="3"
+                            maxLength="200"
+                            className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white resize-none ${
+                              (editFormData.tracker_note?.length || 0) > 200 
+                                ? 'border-red-500 focus:border-red-500 focus:ring-red-100' 
+                                : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                            }`}
+                            value={editFormData.tracker_note}
+                            onChange={(e) => handleEditFieldChange('tracker_note', e.target.value)}
+                            placeholder="Enter any additional notes or comments..."
+                          ></textarea>
+                        </div>
+                        {(editFormData.tracker_note?.length || 0) > 200 && (
+                          <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" x2="12" y1="8" y2="12"></line>
+                              <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                            </svg>
+                            Notes cannot exceed 200 characters
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* Action Buttons */}
@@ -1499,6 +2042,503 @@ const QATrackerReport = () => {
                               <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                             Update Tracker
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Add Tracker Modal */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+              <form onSubmit={handleAddSubmit}>
+                {loadingAddData ? (
+                  <div className="flex items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Modal Header */}
+                    <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl px-6 py-4 flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-white">Add New Tracker</h3>
+                      <button
+                        type="button"
+                        onClick={handleCloseAddModal}
+                        className="text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Modal Body */}
+                    <div className="p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Agent Name Selection */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <UsersIcon className="w-4 h-4 text-blue-600" />
+                            Agent Name
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <SearchableSelect
+                            value={addFormData.agent_id}
+                            onChange={(value) => handleAddFieldChange('agent_id', value)}
+                            options={[
+                              { value: '', label: 'Select an agent...' },
+                              ...usersList.map(u => ({ value: String(u.user_id), label: u.user_name }))
+                            ]}
+                            icon={UsersIcon}
+                            placeholder="Select an agent..."
+                            error={addTouched.agent_id && addErrors.agent_id}
+                          />
+                          {addTouched.agent_id && addErrors.agent_id && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addErrors.agent_id}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Date & Time Selection */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                            Date & Time
+                            <span className="text-red-500">*</span>
+                          </label>
+                          
+                          {/* Date Picker */}
+                          <div className="relative cursor-pointer mb-2">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-600 pointer-events-none" />
+                            <input
+                              type="date"
+                              className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white cursor-pointer ${
+                                addTouched.tracker_datetime && addErrors.tracker_datetime
+                                  ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                                  : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                              }`}
+                              value={addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[0] : ''}
+                              onChange={(e) => {
+                                const date = e.target.value;
+                                const time = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[1] : '00:00';
+                                handleAddFieldChange('tracker_datetime', date ? `${date}T${time}` : '');
+                              }}
+                              max={new Date().toISOString().split('T')[0]}
+                            />
+                          </div>
+                          
+                          {/* Time Picker - 12 Hour Format */}
+                          <div className="grid grid-cols-3 gap-2">
+                            {/* Hour Dropdown */}
+                            <div className="relative">
+                              <select
+                                className={`w-full bg-slate-50 border rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white ${
+                                  addTouched.tracker_datetime && addErrors.tracker_datetime
+                                    ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                                    : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                                }`}
+                                value={addFormData.tracker_datetime ? (() => {
+                                  const time = addFormData.tracker_datetime.split('T')[1] || '00:00';
+                                  let hour = parseInt(time.split(':')[0]);
+                                  if (hour === 0) return 12;
+                                  if (hour > 12) return hour - 12;
+                                  return hour;
+                                })() : 12}
+                                onChange={(e) => {
+                                  const date = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                  const time = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[1] : '00:00';
+                                  const currentHour = parseInt(time.split(':')[0]);
+                                  const minute = time.split(':')[1];
+                                  const isPM = currentHour >= 12;
+                                  let newHour = parseInt(e.target.value);
+                                  if (isPM && newHour !== 12) newHour += 12;
+                                  else if (!isPM && newHour === 12) newHour = 0;
+                                  handleAddFieldChange('tracker_datetime', `${date}T${String(newHour).padStart(2, '0')}:${minute}`);
+                                }}
+                              >
+                                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(hour => (
+                                  <option key={hour} value={hour}>{hour}</option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            {/* Minute Dropdown */}
+                            <div className="relative">
+                              <select
+                                className={`w-full bg-slate-50 border rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white ${
+                                  addTouched.tracker_datetime && addErrors.tracker_datetime
+                                    ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                                    : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                                }`}
+                                value={addFormData.tracker_datetime ? (addFormData.tracker_datetime.split('T')[1] || '00:00').split(':')[1] : '00'}
+                                onChange={(e) => {
+                                  const date = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                  const time = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[1] : '00:00';
+                                  const hour = time.split(':')[0];
+                                  handleAddFieldChange('tracker_datetime', `${date}T${hour}:${e.target.value}`);
+                                }}
+                              >
+                                {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(min => (
+                                  <option key={min} value={min}>{min}</option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            {/* AM/PM Dropdown */}
+                            <div className="relative">
+                              <select
+                                className={`w-full bg-slate-50 border rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white ${
+                                  addTouched.tracker_datetime && addErrors.tracker_datetime
+                                    ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                                    : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                                }`}
+                                value={addFormData.tracker_datetime ? (() => {
+                                  const time = addFormData.tracker_datetime.split('T')[1] || '00:00';
+                                  const hour = parseInt(time.split(':')[0]);
+                                  return hour >= 12 ? 'PM' : 'AM';
+                                })() : 'AM'}
+                                onChange={(e) => {
+                                  const date = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
+                                  const time = addFormData.tracker_datetime ? addFormData.tracker_datetime.split('T')[1] : '00:00';
+                                  let hour = parseInt(time.split(':')[0]);
+                                  const minute = time.split(':')[1];
+                                  const newIsPM = e.target.value === 'PM';
+                                  const currentIsPM = hour >= 12;
+                                  
+                                  if (newIsPM && !currentIsPM) {
+                                    hour = hour === 12 ? 12 : hour + 12;
+                                  } else if (!newIsPM && currentIsPM) {
+                                    hour = hour === 12 ? 0 : hour - 12;
+                                  }
+                                  
+                                  handleAddFieldChange('tracker_datetime', `${date}T${String(hour).padStart(2, '0')}:${minute}`);
+                                }}
+                              >
+                                <option value="AM">AM</option>
+                                <option value="PM">PM</option>
+                              </select>
+                            </div>
+                          </div>
+                          
+                          {addTouched.tracker_datetime && addErrors.tracker_datetime && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addErrors.tracker_datetime}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Project Selection */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <Briefcase className="w-4 h-4 text-blue-600" />
+                            Project Name
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <SearchableSelect
+                            value={addFormData.project_id}
+                            onChange={(value) => handleAddFieldChange('project_id', value)}
+                            options={[
+                              { value: '', label: 'Select a project...' },
+                              ...addProjects.map(p => ({ value: String(p.project_id), label: p.project_name }))
+                            ]}
+                            icon={Briefcase}
+                            placeholder="Select a project..."
+                            error={addTouched.project_id && addErrors.project_id}
+                          />
+                          {addTouched.project_id && addErrors.project_id && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addErrors.project_id}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Task Selection */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <ListChecks className="w-4 h-4 text-blue-600" />
+                            Task Name
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <SearchableSelect
+                            value={addFormData.task_id}
+                            onChange={(value) => handleAddFieldChange('task_id', value)}
+                            options={[
+                              { value: '', label: 'Select a task...' },
+                              ...addTasks.map(t => ({ value: String(t.task_id), label: t.task_name || t.label }))
+                            ]}
+                            icon={ListChecks}
+                            placeholder="Select a task..."
+                            disabled={!addFormData.project_id}
+                            error={addTouched.task_id && addErrors.task_id}
+                          />
+                          {addTouched.task_id && addErrors.task_id && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addErrors.task_id}
+                            </p>
+                          )}
+                        </div>
+
+{/* Shift Selection */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+            <Clock className="w-4 h-4 text-blue-600" />
+            Shift
+            <span className="text-red-500">*</span>
+          </label>
+          <SearchableSelect
+            value={addFormData.shift_type}
+            onChange={(value) => handleAddFieldChange('shift_type', value)}
+            options={[
+              { value: 'day', label: 'Day' },
+              { value: 'night', label: 'Night' }
+            ]}
+            icon={Clock}
+            placeholder="Select shift..."
+                            error={addTouched.shift_type && addErrors.shift_type}
+                          />
+                          {addTouched.shift_type && addErrors.shift_type && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addErrors.shift_type}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Base Target */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <circle cx="12" cy="12" r="6"></circle>
+                              <circle cx="12" cy="12" r="2"></circle>
+                            </svg>
+                            Base Target
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <div className="w-full bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-300 rounded-lg px-4 py-3 text-sm font-bold text-slate-700 shadow-sm flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                                <rect width="14" height="10" x="5" y="11" rx="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                              </svg>
+                              <span>{addFormData.base_target ? Number(addFormData.base_target).toFixed(2) : '—'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Production Target */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                              <line x1="12" x2="12" y1="2" y2="22"></line>
+                              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            Production
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none">
+                              <line x1="12" x2="12" y1="2" y2="22"></line>
+                              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            <input
+                              type="text"
+                              className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white ${
+                                addTouched.production && addErrors.production
+                                  ? 'border-red-500 focus:border-red-500 focus:ring-red-100'
+                                  : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                              }`}
+                              value={addFormData.production}
+                              onChange={(e) => handleAddFieldChange('production', e.target.value)}
+                              onBlur={(e) => {
+                                const value = e.target.value.trim();
+                                if (value && !isNaN(value)) {
+                                  handleAddFieldChange('production', parseFloat(value).toFixed(2));
+                                }
+                              }}
+                              placeholder="Enter production"
+                            />
+                          </div>
+                          {addTouched.production && addErrors.production && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addErrors.production}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* File Upload Section */}
+                        <div className="space-y-2 md:col-span-2 md:row-span-2">
+                          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                            </svg>
+                            Project Files
+                          </label>
+                          <div
+                            onClick={() => document.getElementById('add-file-upload').click()}
+                            className={`relative h-[120px] flex items-center justify-center border-2 border-dashed rounded-lg px-4 py-4 text-center transition-all cursor-pointer group ${
+                              addFileError 
+                                ? 'border-red-300 bg-red-50/30 hover:border-red-400' 
+                                : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
+                            }`}
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors ${
+                                addFileError ? 'bg-red-100' : 'bg-blue-100'
+                              }`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={addFileError ? 'text-red-600' : 'text-blue-600'}>
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                  <polyline points="17 8 12 3 7 8"></polyline>
+                                  <line x1="12" x2="12" y1="3" y2="15"></line>
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-slate-700">
+                                  {addFormData.tracker_file ? (
+                                    <span className="text-blue-600 break-all">{addFormData.tracker_file.name}</span>
+                                  ) : (
+                                    <>Click to <span className="text-blue-600">upload</span></>
+                                  )}
+                                </p>
+                                <p className="text-xs text-slate-500 mt-1">Max: 10MB</p>
+                              </div>
+                            </div>
+                            <input
+                              id="add-file-upload"
+                              type="file"
+                              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                              onChange={handleAddFileChange}
+                              className="hidden"
+                            />
+                          </div>
+                          {addFileError && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              {addFileError}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Notes Field */}
+                        <div className="space-y-2 md:col-span-3">
+                          <label className="flex items-center justify-between text-sm font-bold text-slate-700 uppercase tracking-wide">
+                            <span className="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" x2="8" y1="13" y2="13"></line>
+                                <line x1="16" x2="8" y1="17" y2="17"></line>
+                                <line x1="10" x2="8" y1="9" y2="9"></line>
+                              </svg>
+                              Notes
+                            </span>
+                            <span className={`text-xs font-medium ${
+                              (addFormData.tracker_note?.length || 0) > 200 ? 'text-red-600' : 'text-slate-500'
+                            }`}>
+                              {addFormData.tracker_note?.length || 0}/200
+                            </span>
+                          </label>
+                          <div className="relative">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-3 text-blue-600 pointer-events-none">
+                              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" x2="8" y1="13" y2="13"></line>
+                              <line x1="16" x2="8" y1="17" y2="17"></line>
+                              <line x1="10" x2="8" y1="9" y2="9"></line>
+                            </svg>
+                            <textarea
+                              rows="3"
+                              maxLength="200"
+                              className={`w-full bg-slate-50 border rounded-lg pl-10 pr-4 py-3 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 transition-all shadow-sm hover:bg-white resize-none ${
+                                (addFormData.tracker_note?.length || 0) > 200 
+                                  ? 'border-red-500 focus:border-red-500 focus:ring-red-100' 
+                                  : 'border-slate-300 focus:border-blue-500 focus:ring-blue-100'
+                              }`}
+                              value={addFormData.tracker_note}
+                              onChange={(e) => handleAddFieldChange('tracker_note', e.target.value)}
+                              placeholder="Enter any additional notes or comments..."
+                            ></textarea>
+                          </div>
+                          {(addFormData.tracker_note?.length || 0) > 200 && (
+                            <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" x2="12" y1="8" y2="12"></line>
+                                <line x1="12" x2="12.01" y1="16" y2="16"></line>
+                              </svg>
+                              Notes cannot exceed 200 characters
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="flex items-center justify-center gap-4 pt-3 pb-6 px-6 border-t border-slate-200">
+                      <button
+                        type="button"
+                        onClick={handleCloseAddModal}
+                        className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2"
+                      >
+                        <X className="w-4 h-4" />
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submittingAdd}
+                        className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-sm rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {submittingAdd ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4" />
+                            Submit
                           </>
                         )}
                       </button>
